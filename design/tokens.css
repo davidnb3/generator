@@ -1,0 +1,97 @@
+/* Generator design tokens. Source of truth: design/DESIGN-SYSTEM.md.
+   Components read semantic tokens (layer 2), never the raw palette (layer 1). */
+
+:root {
+  /* 1. Palette (mode-stable) */
+  --violet-500: #6f56e8;
+  --violet-400: #8f74ff;
+  --violet-200: #c3b2ff;
+  --amber-500: #e8782f;
+  --amber-400: #f6a944;
+  --amber-200: #ffd08a;
+  --rose-400: #ff6f91;
+  --ink-950: #07060c;
+  --ink-900: #0a0910;
+  --ink-800: #121019;
+  --ink-700: #2a2736;
+  --cream: #ffe8c4;
+  --white: #ffffff;
+
+  /* 2. Semantic: surfaces and text */
+  --bg: var(--ink-950);
+  --canvas: var(--ink-900);
+  --panel-top: rgba(255, 255, 255, 0.05);
+  --panel-bot: rgba(255, 255, 255, 0.018);
+  --fill-well: rgba(0, 0, 0, 0.25);
+  --fill-hover: rgba(255, 255, 255, 0.08);
+  --line: rgba(255, 255, 255, 0.085);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --text: #ece8f5;
+  --text-2: #a099b8;
+  --muted: #625c78;
+  --on-accent: #1a1020;
+
+  /* 2. Semantic: roles. Violet = source/cloud side, amber = modulation and spectral side */
+  --accent-cool: var(--violet-400);
+  --accent-cool-hi: var(--violet-200);
+  --accent-warm: var(--amber-400);
+  --accent-warm-hi: var(--amber-200);
+  --danger: var(--rose-400);
+  --mod: var(--amber-200); /* modulation overlays: arcs, dots, playhead */
+  --playhead: var(--amber-200);
+
+  --grad-cool: linear-gradient(90deg, var(--violet-500), var(--violet-200));
+  --grad-warm: linear-gradient(90deg, var(--amber-500), var(--amber-200));
+  --grad-brand: linear-gradient(100deg, var(--violet-200), var(--amber-200));
+  --grad-knob-body: radial-gradient(circle at 35% 28%, var(--ink-700), var(--ink-800));
+
+  /* 3. Typography */
+  --font-ui: "Sora", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --fs-micro: 10px; /* mono labels, tracking .16–.2em, uppercase */
+  --fs-caption: 11px;
+  --fs-ui: 12px;
+  --fs-body: 13px;
+  --fs-value: 15px;
+  --fs-brand: 14px;
+  --track-label: 0.18em;
+  --track-brand: 0.32em;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-strong: 600; /* Fire button only */
+
+  /* 4. Spacing (4 px base) and layout */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --stage-w: 1440px;
+  --stage-h: 900px;
+
+  /* 5. Shape */
+  --r-xs: 7px; /* mini buttons */
+  --r-sm: 10px; /* segmented control */
+  --r-md: 12px; /* wells, rows, canvases */
+  --r-lg: 18px; /* panels */
+  --r-pill: 999px;
+  --bw: 1px;
+
+  /* 6. Elevation (glows replace shadows on this dark canvas) */
+  --glow-cool: 0 0 8px var(--violet-400);
+  --glow-warm: 0 0 8px var(--amber-400);
+  --glow-on: 0 0 20px rgba(246, 169, 68, 0.28), inset 0 0 14px rgba(246, 169, 68, 0.12);
+  --focus-ring: 2px solid var(--violet-200);
+
+  /* 7. Motion */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 0.2s; /* hover, press */
+  --dur-base: 0.3s; /* toggles, segmented */
+  --dur-enter: 0.7s; /* panel entrance, staggered 90 ms */
+  --dur-toast: 0.4s;
+  --stagger: 90ms;
+  --dur-halo: 6s; /* orb breathing loop */
+  --dur-shock: 1300ms; /* drop shockwave (JS) */
+  --dur-ripple: 1400ms; /* puck ripple (JS) */
+}

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generator — UI prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gradV" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#6f56e8"/><stop offset="1" stop-color="#c3b2ff"/>
+    </linearGradient>
+    <linearGradient id="gradA" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#e8782f"/><stop offset="1" stop-color="#ffd08a"/>
+    </linearGradient>
+    <linearGradient id="gradVA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8f74ff"/><stop offset="1" stop-color="#f6a944"/>
+    </linearGradient>
+    <radialGradient id="bodyGrad" cx="40%" cy="30%" r="80%">
+      <stop offset="0" stop-color="#3d3a4c"/><stop offset="1" stop-color="#14121b"/>
+    </radialGradient>
+  </defs>
+</svg>
+
+<div id="app">
+  <div class="bg-grid"></div>
+
+  <header id="top" class="enter" style="--d:0">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+        <circle cx="15" cy="15" r="11" fill="none" stroke="url(#gradVA)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="58 12" transform="rotate(-70 15 15)"/>
+        <circle cx="15" cy="15" r="3" fill="#ffd08a"/>
+      </svg>
+      <span>GENERATOR</span>
+    </div>
+    <div class="preset">
+      <button class="icon-btn" aria-label="Previous preset">‹</button>
+      <div class="preset-name"><b>Rain on tin</b><small>Dusk drift · 8 bars</small></div>
+      <button class="icon-btn" aria-label="Next preset">›</button>
+    </div>
+    <div class="top-r">
+      <div class="stat"><small>BPM</small><b>84</b></div>
+      <div class="stat"><small>SEED</small><b id="seedVal">4081</b></div>
+      <button id="recBtn" class="rec" aria-pressed="false"><i></i><span id="recTime">REC</span></button>
+      <button id="exportBtn" class="btn-primary">Export WAV</button>
+    </div>
+  </header>
+
+  <section class="panel enter" id="pSource" style="--d:1;left:24px;top:80px;width:260px;height:560px">
+    <h4><i class="dot"></i>Source</h4>
+    <div class="drop" id="drop" role="button" tabindex="0" aria-label="Replace sample">
+      <div class="drop-top">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></svg>
+        <div><b id="sName">rain_on_tin.wav</b><small id="sMeta">8.0 s · 44.1 kHz · mono</small></div>
+      </div>
+      <canvas id="mini" width="456" height="112"></canvas>
+      <p>Drop audio here or click to replace</p>
+    </div>
+    <input type="file" id="file" accept="audio/*" hidden>
+
+    <h4 class="sp"><i class="dot a"></i>Orb mapping</h4>
+    <div class="axis"><span class="tag">X</span><b>Texture</b></div>
+    <div class="map" data-ax="x" data-id="size"><span>Grain size</span><div class="bar"><i></i></div></div>
+    <div class="map" data-ax="x" data-id="filter"><span>Filter</span><div class="bar"><i></i></div></div>
+    <div class="map" data-ax="x" data-id="space"><span>Space</span><div class="bar"><i></i></div></div>
+    <div class="axis"><span class="tag a">Y</span><b>Energy</b></div>
+    <div class="map" data-ax="y" data-id="density"><span>Density</span><div class="bar a"><i></i></div></div>
+    <div class="map" data-ax="y" data-id="pitch"><span>Pitch spread</span><div class="bar a"><i></i></div></div>
+    <div class="map" data-ax="y" data-id="drive"><span>Drive</span><div class="bar a"><i></i></div></div>
+  </section>
+
+  <section id="stage" class="enter" style="--d:2;left:300px;top:80px;width:840px;height:560px">
+    <div class="halo"></div>
+    <canvas id="orb" width="560" height="560"></canvas>
+    <div class="ax ax-y">ENERGY</div>
+    <div class="ax ax-x">TEXTURE</div>
+    <div class="readout"><span>TEXTURE <b id="rx">62</b></span><span>ENERGY <b id="ry">58</b></span></div>
+    <div class="flash" id="flash"></div>
+  </section>
+
+  <section class="panel enter" id="pRight" style="--d:3;left:1156px;top:80px;width:260px;height:560px">
+    <h4><i class="dot"></i>Voices</h4>
+    <div class="bigs"><div id="kCloud"></div><div id="kSpec"></div></div>
+    <div class="row-sw"><span>Reverse</span><button class="switch" id="revSw" aria-pressed="false" aria-label="Reverse"></button></div>
+    <h4 class="sp"><i class="dot a"></i>Layers</h4>
+    <div class="layer"><i class="dot"></i><span>Grain cloud</span><div class="lm"><i></i></div><button class="mini" aria-pressed="false" aria-label="Mute grain cloud">M</button></div>
+    <div class="layer"><i class="dot"></i><span>Slow player</span><div class="lm"><i></i></div><button class="mini" aria-pressed="false" aria-label="Mute slow player">M</button></div>
+    <div class="layer"><i class="dot a"></i><span>Spectral</span><div class="lm a"><i></i></div><button class="mini" aria-pressed="false" aria-label="Mute spectral">M</button></div>
+    <div class="wet"><span>Dry</span><input type="range" min="0" max="100" value="68" id="wet" aria-label="Dry wet"><span>Wet</span></div>
+  </section>
+
+  <section class="panel enter" id="pGesture" style="--d:4;left:24px;top:656px;width:736px;height:224px">
+    <div class="g-left">
+      <h4><i class="dot"></i>Gesture <em>risers and drops</em></h4>
+      <div class="seg" id="gType">
+        <button data-v="riser" class="on">Riser</button><button data-v="drop">Drop</button><button data-v="both">Riser → drop</button>
+      </div>
+      <div class="seg small" id="gBars">
+        <button data-v="4">4</button><button data-v="8" class="on">8</button><button data-v="16">16</button><small>bars</small>
+      </div>
+      <div class="g-knobs"><div id="kRand"></div><div id="kShape"></div></div>
+      <button class="fire" id="fire"><span>Fire</span></button>
+    </div>
+    <canvas id="gcv" width="880" height="360"></canvas>
+  </section>
+
+  <section class="panel enter" id="pMacros" style="--d:5;left:776px;top:656px;width:640px;height:224px">
+    <h4><i class="dot a"></i>Performance</h4>
+    <div class="macros" id="macros"></div>
+    <div class="out">
+      <span class="lbl">OUT</span>
+      <canvas id="meters" width="760" height="60"></canvas>
+      <span class="db" id="dbRead">-9.4 dB</span>
+    </div>
+  </section>
+
+  <div id="toast" role="status"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
