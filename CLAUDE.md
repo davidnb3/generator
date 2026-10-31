@@ -8,9 +8,15 @@ physics-driven), with risers/drops, modulation, and WAV export. Built on Audiore
 
 - `PLAN.md` — feature plan and phases.
 - `src/` — the React app (Vite + TypeScript). `npm run dev`, `npm run typecheck`, `npm test`, `npm run build`.
-  - `src/audio/` — audio layer: `Instrument` (an `AudioProcessor` holding all params, orb, gestures, sample),
-    pure modules (`modulation`, `gesture`, `rng`, `sample`, `params`) with Vitest tests, and `engine.ts`
-    (client-only `createEngine`). No sound is produced yet.
+  - `src/audio/` — audio layer: `Instrument` (an `AudioProcessor` holding all params, orb, gestures, sample, and the
+    signal chain), `GranularCloud` (grain scheduler; `scheduleUntil` is the only place grains are made, so live and
+    offline renders share it), pure modules (`granularMath`, `modulation`, `gesture`, `rng`, `sample`, `params`) with
+    Vitest tests, and `engine.ts` (client-only `createEngine`).
+  - Signal chain: GranularCloud + BufferPlayer (slow loop, rate 0.25) -> low-pass (Filter knob) -> master -> limiter.
+    Wired to sound: Position, Size, Density, Spray, Pitch, Filter, Cloud level, mutes, Freeze, Reverse, Evolve,
+    gestures. Not yet: Space, Drive, Spectral, Wet, Scatter/Octave/Stutter, REC and Export WAV.
+  - The cloud reads at playhead + Position. The playhead is the head on the orb ring; Freeze holds it, Reverse runs it
+    backwards and plays grains from a reversed buffer. Audio starts on the first click (AudioContext autoplay policy).
   - `src/midi/` — Web MIDI input with learn (`MidiManager`) and pure decoding (`bindings.ts`, tested).
   - `src/ui/` — React components (Knob, Orb, Canvases, Panels, TopBar, App). UI reads params with `useValue`
     and writes `param.value` or calls `Instrument` methods; it never schedules audio.

@@ -5,7 +5,7 @@ export const MODULATED = [
   { id: "density", label: "Density", default: 0.55, ax: 0, ay: 0.5 },
   { id: "spray", label: "Spray", default: 0.3, ax: 0.2, ay: 0.2 },
   { id: "pitch", label: "Pitch", default: 0.5, ax: 0, ay: 0.35 },
-  { id: "filter", label: "Filter", default: 0.62, ax: 0.4, ay: 0 },
+  { id: "filter", label: "Filter", default: 0.75, ax: 0.4, ay: 0 },
   { id: "space", label: "Space", default: 0.4, ax: 0.45, ay: 0 },
   { id: "drive", label: "Drive", default: 0.2, ax: 0, ay: 0.5 },
 ] as const;

@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { type EngineState } from "@audiorective/core";
 import { useValue } from "@audiorective/react";
 import { engine } from "../audio/engine";
 import { useMidi, useToast } from "./context";
@@ -23,6 +24,12 @@ function Midi() {
       )}
     </div>
   );
+}
+
+function AudioState() {
+  const state = useValue(engine.core.state as () => EngineState); // SignalAccessor's overloads confuse useValue's inference
+  if (state === "running") return null;
+  return <button className="chip" onClick={() => void engine.core.start()}><i />Audio off · click to start</button>;
 }
 
 export function TopBar() {
@@ -52,6 +59,7 @@ export function TopBar() {
         <button className="icon-btn" aria-label="Next preset">›</button>
       </div>
       <div className="top-r">
+        <AudioState />
         <Midi />
         <div className="stat"><small>BPM</small><b>84</b></div>
         <div className="stat"><small>SEED</small><b>{seed}</b></div>

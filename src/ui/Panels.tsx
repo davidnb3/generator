@@ -36,9 +36,7 @@ export function SourcePanel() {
     const r = await instrument.loadSample(f);
     toast(r.ok ? `Loaded ${r.sample.name}` : r.error);
   };
-  const meta = sample.sampleRate
-    ? `${sample.duration.toFixed(1)} s · ${(sample.sampleRate / 1000).toFixed(1)} kHz · ${sample.channels === 1 ? "mono" : sample.channels === 2 ? "stereo" : `${sample.channels} ch`}`
-    : `${sample.duration.toFixed(1)} s · synthetic`;
+  const meta = `${sample.duration.toFixed(1)} s · ${(sample.sampleRate / 1000).toFixed(1)} kHz · ${sample.channels === 1 ? "mono" : sample.channels === 2 ? "stereo" : `${sample.channels} ch`}${sample.synthetic ? " · demo" : ""}`;
   return (
     <Panel id="pSource" delay={1} style={{ left: 24, top: 80, width: 260, height: 560 }} title={<><i className="dot" />Source</>}>
       <div

@@ -1,9 +1,11 @@
-import { AudioProcessor, Param } from "@audiorective/core";
+import { AudioProcessor, BufferPlayer, Param } from "@audiorective/core";
 import { GESTURE_TYPES, MODULATED, PLAIN, type GestureType, type ModulatedId, type NumericId, type PlainId } from "./params";
 import { clamp, depthOf, effective, gestureBoost, lerp, type Boost } from "./modulation";
 import { gesturePhase } from "./gesture";
 import { createRng, type Rng } from "./rng";
 import { decodeSample, demoSample, type LoadResult, type SampleInfo } from "./sample";
+import { GranularCloud } from "./GranularCloud";
+import { cutoffHz, rateOf, semitones } from "./granularMath";
 
 type InstrumentParams = Record<NumericId, Param<number>> & {
   evolve: Param<boolean>;
@@ -24,11 +26,16 @@ type InstrumentParams = Record<NumericId, Param<number>> & {
 interface RunningGesture { type: GestureType; t0: number; dur: number; impacted: boolean }
 
 /**
- * The instrument's state and behaviour: sample, orb position, knobs, modulation, gestures.
- * No sound is produced yet; the granular cloud, layers and export plug into this processor.
+ * The instrument: sample, orb, knobs, modulation, gestures, and the signal chain
+ * (granular cloud + slow player -> low-pass -> master -> limiter).
+ * Space, drive and the spectral layer are not wired to sound yet.
  */
 export class Instrument extends AudioProcessor<InstrumentParams> {
-  private readonly _out: GainNode;
+  private readonly _out: AudioNode;
+  readonly cloud: GranularCloud;
+  private readonly player: BufferPlayer;
+  private readonly filter: BiquadFilterNode;
+  private readonly lastSent = new Map<string, number>();
   private rng: Rng;
   private running: RunningGesture | null = null;
   private target = { x: 0.28, y: 0.22 };
@@ -47,7 +54,12 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
   };
 
   constructor(ctx: BaseAudioContext) {
-    const out = new GainNode(ctx);
+    const cloud = new GranularCloud(ctx, 4081);
+    const player = new BufferPlayer(ctx, { loop: true, volume: 0, playbackRate: 0.25 });
+    const mix = new GainNode(ctx);
+    const filter = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 8000, Q: 0.7 });
+    const master = new GainNode(ctx, { gain: 0.8 });
+    const limiter = new DynamicsCompressorNode(ctx, { threshold: -6, knee: 0, ratio: 20, attack: 0.003, release: 0.12 });
     super(ctx, ({ param }) => {
       const nums = {} as Record<NumericId, Param<number>>;
       for (const m of MODULATED) nums[m.id] = param<number>({ default: m.default, label: m.label, min: 0, max: 1, step: 0.01 });
@@ -68,13 +80,26 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
           gestureBars: param<number>({ default: 8 }),
           gestureProgress: param<number>({ default: 0 }),
           seed: param<number>({ default: 4081 }),
-          sample: param<SampleInfo>({ default: demoSample() }),
+          sample: param<SampleInfo>({ default: demoSample(ctx) }),
           recordingSince: param<number | null>({ default: null }),
         },
       };
     });
-    this._out = out;
+    this._out = limiter;
+    this.cloud = cloud;
+    this.player = player;
+    this.filter = filter;
     this.rng = createRng(this.params.seed.value);
+
+    this.defineGraph(() => [[cloud, mix], [player, mix], [mix, filter], [filter, master], [master, limiter]]);
+    this.effect(() => {
+      const s = this.params.sample.value;
+      cloud.buffer = s.buffer;
+      player.stop();
+      player.buffer = s.buffer;
+      player.start(ctx.currentTime);
+    });
+    cloud.start();
   }
 
   get output() {
@@ -144,6 +169,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
   setSeed(seed: number) {
     this.params.seed.value = seed;
     this.rng = createRng(seed);
+    this.cloud.reseed(seed);
   }
 
   /* ---- sample ---- */
@@ -193,6 +219,8 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
       p.orbY.value = lerp(p.orbY.value, this.target.y, a);
     }
 
+    this.applyAudio();
+
     // placeholder meters (cosmetic, so Math.random is fine; no sound is produced yet)
     const dens = this.effective("density"), pitch = this.effective("pitch"), space = this.effective("space"), filter = this.effective("filter");
     const target = [0.25 + dens * 0.7, 0.2 + (1 - pitch) * 0.3 + (p.reverse.value ? 0.2 : 0), 0.1 + space * 0.5 + filter * 0.2];
@@ -202,6 +230,35 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     const master = ((live.level[0] + live.level[1] + live.level[2]) / 3) * (0.4 + p.wet.value * 0.4);
     for (let c = 0; c < 2; c++) live.meter[c] = lerp(live.meter[c], clamp(master + (Math.random() - 0.5) * 0.15), f);
     live.db = -30 + master * 28;
+  }
+
+  /** Pushes the values you hear to the audio graph. Smoothed, and only sent when they change. */
+  private applyAudio() {
+    const p = this.params, c = this.cloud.params, st = semitones(this.effective("pitch"));
+    c.position.value = this.effective("position");
+    c.size.value = this.effective("size");
+    c.density.value = this.effective("density");
+    c.spray.value = this.effective("spray");
+    c.pitch.value = st;
+    c.playhead.value = this.live.head;
+    c.reverse.value = p.reverse.value;
+    this.send("cloud", c.level, p.muteCloud.value ? 0 : this.effective("cloud") * 0.9, 0.05);
+    this.send("slow", this.player.params.volume, p.muteSlow.value ? 0 : 0.3, 0.05);
+    this.send("rate", this.player.params.rate, 0.25 * rateOf(st), 0.1);
+    this.send("cutoff", this.filter.frequency, cutoffHz(this.effective("filter")), 0.03);
+  }
+
+  private send(key: string, param: { setTargetAtTime(v: number, t: number, tc: number): unknown }, value: number, timeConstant: number) {
+    const last = this.lastSent.get(key);
+    if (last !== undefined && Math.abs(last - value) < 0.002 * Math.max(1, Math.abs(value))) return;
+    this.lastSent.set(key, value);
+    param.setTargetAtTime(value, this.context.currentTime, timeConstant);
+  }
+
+  destroy() {
+    this.cloud.destroy();
+    this.player.destroy();
+    super.destroy();
   }
 
   /* ---- recording (stub until the audio engine exists) ---- */
