@@ -5,7 +5,7 @@ Upload a sound, shape it with granular, spectral and physics-driven sources, add
 modulation and randomness, fire risers and drops, and bounce everything to WAV for
 a DAW. Inspired by Native Instruments' Kinetic Metal.
 
-Status: planning only. Nothing is implemented yet.
+Status: Phase 0 in progress. The React UI, instrument state, orb keyboard control and MIDI learn exist; no sound is produced yet (next: sample playback, then `GranularCloud`).
 
 ## Stack
 

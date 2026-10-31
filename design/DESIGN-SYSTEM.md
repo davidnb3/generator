@@ -118,7 +118,9 @@ A 480 px circular XY surface (canvas, 560 px including glow) that moves a puck. 
 
 Grains are the sound made visible: a grain's exit point on the ring maps to a position in the sample, and the bar there flares. Colors: cream, violet and amber at about 45 / 35 / 20%.
 
-Accessibility gap: the orb is pointer-only today. v0.2 must add arrow-key control (focusable, `role="application"` with a live readout) and a text readout of X and Y (the "Texture 62 / Energy 58" line is the start of it).
+Keyboard: the orb is focusable (`role="application"`, `aria-roledescription="2D modulation pad"`). Arrows move the puck 2% of the pad, Shift moves 10%, Alt moves 0.5%, Home recentres. A visually hidden readout ("Texture 62 percent, energy 58 percent") is linked with `aria-describedby` and updates about four times a second. Global keys: F fire, E evolve, Z freeze, R reverse, 1/2/3 gesture type, Esc cancels MIDI learn.
+
+MIDI: any knob and the orb can be bound to a MIDI control. In learn mode (top bar: MIDI, then Learn) controls get a dashed amber outline; the armed one pulses. Clicking the orb arms X then Y in turn. Encoders on ports named Push or Encoder bind as relative.
 
 ### Segmented control
 Pill container (`--r-sm`, 3 px padding) with equal buttons, one selected. Selected state is a violet tint with a 1 px `--accent-cool-hi` inset ring. Use for mutually exclusive modes with 2 to 4 options (Riser, Drop, Riser → drop; 4, 8, 16 bars). Use a toggle, not a segmented control, for on/off.
@@ -160,7 +162,7 @@ Centered bottom pill, slides up 20 px and fades in over 0.4 s, auto-hides after 
 - Never rely on color alone: modulated knobs also show a dot position, meters also show dB, mode buttons also show text.
 - Respect `prefers-reduced-motion`: entrance, halo, ping and REC pulse are disabled; gesture duration is shortened. The orb canvas should also lower grain count under reduced motion (v0.2).
 - Minimum target size is 24 px (mini button); primary targets are 44 px or larger.
-- Known gaps: orb keyboard control, `aria-live` readout for the orb, `--muted` text contrast on small captions.
+- Known gaps: `--muted` text contrast on small captions; MIDI learn is pointer-initiated only.
 
 ## 5. Writing
 
@@ -196,7 +198,7 @@ Canvas code can't read `var()` directly. Read tokens once with `getComputedStyle
 | Type scale | 12 distinct font sizes (9 to 18 px) | Collapse to the 7 sizes above when the UI is rebuilt in React |
 | Radii | 13 distinct values | Map to `--r-xs` to `--r-pill`; 6, 8, 11, 14, 17, 22 px are strays |
 | Tokens | Palette and semantic tokens extracted into `tokens.css`; prototype now loads it and renamed variables (`--violet-400`, `--amber-200`, ...) | Done |
-| Accessibility | Knobs and toggles are labelled; orb is not keyboard accessible | v0.2 |
+| Accessibility | Knobs and toggles are labelled; orb keyboard control added in the React port | Done |
 | Naming | Mixed `k*` ids for knob hosts and `.mac`, `.mini` class names | Rename to BEM-style component names during React port |
 
 Score: structure 8/10, token coverage 6/10, accessibility 6/10.
