@@ -1,7 +1,9 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { type EngineState } from "@audiorective/core";
 import { useValue } from "@audiorective/react";
 import { engine } from "../audio/engine";
+import { downloadBytes, encodeWav } from "../audio/export/wav";
+import { renderTake } from "../audio/export/render";
 import { useMidi, useToast } from "./context";
 import { useFrame } from "./frameBus";
 
@@ -37,6 +39,37 @@ export function TopBar() {
   const seed = useValue(instrument.params.seed);
   const since = useValue(instrument.params.recordingSince);
   const rec = useRef<HTMLSpanElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const toggleRec = async () => {
+    try {
+      if (!instrument.recording) { await instrument.startRecording(); return; }
+      const take = await instrument.stopRecording();
+      const name = `generator-take-${take.id}.wav`;
+      downloadBytes(name, encodeWav(take.pcm, take.sampleRate));
+      toast(`Saved ${name} · ${take.duration.toFixed(1)} s, 24-bit stereo. Export WAV re-renders this take offline.`);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Recording failed. Try again.");
+    }
+  };
+
+  const exportWav = async () => {
+    const take = instrument.lastTake;
+    if (!take) { toast("Record a take first, then export it."); return; }
+    setBusy(true);
+    toast("Rendering…");
+    try {
+      const r = await renderTake(take);
+      const name = `generator-take-${take.id}-render.wav`;
+      downloadBytes(name, encodeWav(r.channels, r.sampleRate));
+      toast(`Saved ${name} · offline render, 24-bit stereo`);
+    } catch {
+      toast("Couldn't render that take. Try recording it again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   useFrame((now) => {
     if (!rec.current) return;
     const s = instrument.params.recordingSince.value;
@@ -63,11 +96,8 @@ export function TopBar() {
         <Midi />
         <div className="stat"><small>BPM</small><b>84</b></div>
         <div className="stat"><small>SEED</small><b>{seed}</b></div>
-        <button className="rec" aria-pressed={since !== null} onClick={() => {
-          const secs = instrument.toggleRecording();
-          if (secs !== null) toast(`Captured ${secs.toFixed(1)} s. Real WAV capture arrives with the audio engine.`);
-        }}><i /><span ref={rec}>REC</span></button>
-        <button className="btn-primary" onClick={() => toast("Offline render to WAV arrives with the audio engine.")}>Export WAV</button>
+        <button className="rec" aria-pressed={since !== null} onClick={() => void toggleRec()}><i /><span ref={rec}>REC</span></button>
+        <button className="btn-primary" disabled={busy} onClick={() => void exportWav()}>Export WAV</button>
       </div>
     </header>
   );

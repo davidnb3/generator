@@ -12,9 +12,10 @@ physics-driven), with risers/drops, modulation, and WAV export. Built on Audiore
     signal chain), `GranularCloud` (grain scheduler; `scheduleUntil` is the only place grains are made, so live and
     offline renders share it), pure modules (`granularMath`, `modulation`, `gesture`, `rng`, `sample`, `params`) with
     Vitest tests, and `engine.ts` (client-only `createEngine`).
-  - Signal chain: GranularCloud + BufferPlayer (slow loop, rate 0.25) -> low-pass (Filter knob) -> master -> limiter.
+  - Signal chain (`Voices.ts`, shared by live and offline): GranularCloud + BufferPlayer (slow loop, rate 0.25)
+    -> low-pass (Filter knob) -> master -> limiter.
     Wired to sound: Position, Size, Density, Spray, Pitch, Filter, Cloud level, mutes, Freeze, Reverse, Evolve,
-    gestures. Not yet: Space, Drive, Spectral, Wet, Scatter/Octave/Stutter, REC and Export WAV.
+    gestures. Not yet: Space, Drive, Spectral, Wet, Scatter/Octave/Stutter.
   - The cloud reads at playhead + Position. The playhead is the head on the orb ring; Freeze holds it, Reverse runs it
     backwards and plays grains from a reversed buffer. Audio starts on the first click (AudioContext autoplay policy).
   - `src/midi/` — Web MIDI input with learn (`MidiManager`) and pure decoding (`bindings.ts`, tested).
@@ -40,6 +41,19 @@ knobs arced around it, side panels, gesture (riser/drop) panel and performance b
 - All randomness goes through one seeded RNG; log events so offline renders match live.
 - Keyboard and MIDI target the same control ids (`NumericId` in `src/audio/params.ts`); add new knobs there so
   keyboard, MIDI learn and the UI stay in step.
+
+## WAV export (`src/audio/export/`)
+
+- REC captures the master output with an AudioWorklet (`recorder.ts`, exact PCM, node loaded once when audio starts so
+  the first take doesn't glitch) and downloads a 24-bit stereo WAV (`wav.ts`) when stopped. Needs audio running.
+- A take (`take.ts`) also logs every grain created (`GranularCloud.onGrain`), every control value sent to the graph
+  (`Instrument.send`), the seed, the sample, and the slow player's loop position at the first captured frame
+  (`playerClock.ts`, closed-form from the logged rate curves).
+- Export WAV re-renders the last take offline (`render.ts`, `Voices` in an `OfflineAudioContext`, 0.5 s pre-roll so
+  grains that began before REC still sound). Cloud alone is sample-exact vs the live capture. With the slow layer and
+  limiter the render tracks the live capture closely (correlation about 0.95 to 0.99), not sample-identical, because the
+  compressor carries history the render can't see.
+- Anything that changes sound must go through `Instrument.send` (or `GranularCloud.onGrain`) or a take can't replay it.
 
 ## Keyboard
 

@@ -1,6 +1,9 @@
 import { AudioProcessor, reverseBuffer, type Param, type SchedulableParam } from "@audiorective/core";
 import { createRng, type Rng } from "./rng";
-import { hann, nextInterval, planGrain } from "./granularMath";
+import { hann, nextInterval, planGrain, type GrainPlan } from "./granularMath";
+
+/** A grain that was created: when it starts (context seconds) and exactly what it plays. */
+export interface GrainEvent { when: number; plan: GrainPlan; reversed: boolean }
 
 type CloudParams = {
   position: Param<number>; // offset from the playhead, 0..1 of the sample
@@ -31,6 +34,8 @@ export class GranularCloud extends AudioProcessor<CloudParams> {
   private active = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly window = hann();
+  /** Called for every grain that is created; a recording uses it to log the take. */
+  onGrain: ((e: GrainEvent) => void) | null = null;
 
   constructor(ctx: BaseAudioContext, seed = 1) {
     const out = new GainNode(ctx, { gain: 0.8 });
@@ -84,9 +89,19 @@ export class GranularCloud extends AudioProcessor<CloudParams> {
         { position: p.playhead.value + p.position.value, size: p.size.value, density: p.density.value, spray: p.spray.value, pitch: p.pitch.value },
         buffer.duration, this.rng, reversed,
       );
-      if (this.active < MAX_GRAINS) this.spawn(source, plan, this.nextTime);
+      if (this.active < MAX_GRAINS) {
+        this.spawn(source, plan, this.nextTime);
+        this.onGrain?.({ when: this.nextTime, plan, reversed });
+      }
       this.nextTime += nextInterval(p.density.value, this.rng);
     }
+  }
+
+  /** Plays one logged grain at `when`, without planning or limits. Used to replay a take. */
+  playGrain(plan: GrainPlan, when: number, reversed: boolean) {
+    if (!this._buffer) return;
+    if (reversed && !this._reversed) this._reversed = reverseBuffer(this._buffer);
+    this.spawn(reversed ? this._reversed! : this._buffer, plan, when);
   }
 
   /** Starts the live scheduling timer. Offline renders call `scheduleUntil` themselves instead. */
@@ -101,7 +116,7 @@ export class GranularCloud extends AudioProcessor<CloudParams> {
     this.timer = null;
   }
 
-  private spawn(buffer: AudioBuffer, g: ReturnType<typeof planGrain>, when: number) {
+  private spawn(buffer: AudioBuffer, g: GrainPlan, when: number) {
     const ctx = this.context;
     const src = new AudioBufferSourceNode(ctx, { buffer, playbackRate: g.rate });
     const env = new GainNode(ctx, { gain: 0 });

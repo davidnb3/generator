@@ -1,11 +1,16 @@
-import { AudioProcessor, BufferPlayer, Param } from "@audiorective/core";
+import { AudioProcessor, Param } from "@audiorective/core";
 import { GESTURE_TYPES, MODULATED, PLAIN, type GestureType, type ModulatedId, type NumericId, type PlainId } from "./params";
 import { clamp, depthOf, effective, gestureBoost, lerp, type Boost } from "./modulation";
 import { gesturePhase } from "./gesture";
 import { createRng, type Rng } from "./rng";
 import { decodeSample, demoSample, type LoadResult, type SampleInfo } from "./sample";
-import { GranularCloud } from "./GranularCloud";
+import type { GrainEvent } from "./GranularCloud";
 import { cutoffHz, rateOf, semitones } from "./granularMath";
+import { Voices, type ControlKey, type Settable } from "./Voices";
+import { advance, initialClock, phaseAt, type PlayerClock } from "./playerClock";
+import { Recorder } from "./export/recorder";
+import { PREROLL } from "./export/render";
+import type { ControlEvent, Take } from "./export/take";
 
 type InstrumentParams = Record<NumericId, Param<number>> & {
   evolve: Param<boolean>;
@@ -32,10 +37,16 @@ interface RunningGesture { type: GestureType; t0: number; dur: number; impacted:
  */
 export class Instrument extends AudioProcessor<InstrumentParams> {
   private readonly _out: AudioNode;
-  readonly cloud: GranularCloud;
-  private readonly player: BufferPlayer;
-  private readonly filter: BiquadFilterNode;
-  private readonly lastSent = new Map<string, number>();
+  readonly voices: Voices;
+  private readonly lastSent = new Map<ControlKey, { value: number; tc: number }>();
+  private recorder: Recorder | null = null;
+  private pending: { take: Take; control: ControlEvent[]; clock: PlayerClock } | null = null; // control times are absolute until the take stops
+  private recentGrains: GrainEvent[] = [];
+  private takeCount = 0;
+  /** Slow-player clock: its position follows the logged rate curves exactly, so a take can say where the loop was. */
+  private clock: PlayerClock = initialClock(0);
+  /** The most recent recording, kept for Export WAV. */
+  lastTake: Take | null = null;
   private rng: Rng;
   private running: RunningGesture | null = null;
   private target = { x: 0.28, y: 0.22 };
@@ -54,12 +65,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
   };
 
   constructor(ctx: BaseAudioContext) {
-    const cloud = new GranularCloud(ctx, 4081);
-    const player = new BufferPlayer(ctx, { loop: true, volume: 0, playbackRate: 0.25 });
-    const mix = new GainNode(ctx);
-    const filter = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 8000, Q: 0.7 });
-    const master = new GainNode(ctx, { gain: 0.8 });
-    const limiter = new DynamicsCompressorNode(ctx, { threshold: -6, knee: 0, ratio: 20, attack: 0.003, release: 0.12 });
+    const voices = new Voices(ctx, 4081);
     super(ctx, ({ param }) => {
       const nums = {} as Record<NumericId, Param<number>>;
       for (const m of MODULATED) nums[m.id] = param<number>({ default: m.default, label: m.label, min: 0, max: 1, step: 0.01 });
@@ -83,23 +89,28 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
           sample: param<SampleInfo>({ default: demoSample(ctx) }),
           recordingSince: param<number | null>({ default: null }),
         },
+        latency: 0,
       };
     });
-    this._out = limiter;
-    this.cloud = cloud;
-    this.player = player;
-    this.filter = filter;
+    this.voices = voices;
+    this._out = voices.output;
     this.rng = createRng(this.params.seed.value);
 
-    this.defineGraph(() => [[cloud, mix], [player, mix], [mix, filter], [filter, master], [master, limiter]]);
+    voices.cloud.onGrain = (e) => {
+      this.recentGrains.push(e);
+      this.pending?.take.grains.push(e);
+      const cutoff = ctx.currentTime - 2;
+      if (this.recentGrains.length > 400) this.recentGrains = this.recentGrains.filter((g) => g.when > cutoff);
+    };
     this.effect(() => {
-      const s = this.params.sample.value;
-      cloud.buffer = s.buffer;
-      player.stop();
-      player.buffer = s.buffer;
-      player.start(ctx.currentTime);
+      voices.setBuffer(this.params.sample.value.buffer, 0, ctx.currentTime);
+      this.clock = initialClock(ctx.currentTime);
     });
-    cloud.start();
+    if (ctx instanceof AudioContext) voices.cloud.start();
+  }
+
+  get cloud() {
+    return this.voices.cloud;
   }
 
   get output() {
@@ -234,7 +245,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
 
   /** Pushes the values you hear to the audio graph. Smoothed, and only sent when they change. */
   private applyAudio() {
-    const p = this.params, c = this.cloud.params, st = semitones(this.effective("pitch"));
+    const p = this.params, c = this.voices.cloud.params, st = semitones(this.effective("pitch")), ctrl = this.voices.control;
     c.position.value = this.effective("position");
     c.size.value = this.effective("size");
     c.density.value = this.effective("density");
@@ -242,33 +253,83 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     c.pitch.value = st;
     c.playhead.value = this.live.head;
     c.reverse.value = p.reverse.value;
-    this.send("cloud", c.level, p.muteCloud.value ? 0 : this.effective("cloud") * 0.9, 0.05);
-    this.send("slow", this.player.params.volume, p.muteSlow.value ? 0 : 0.3, 0.05);
-    this.send("rate", this.player.params.rate, 0.25 * rateOf(st), 0.1);
-    this.send("cutoff", this.filter.frequency, cutoffHz(this.effective("filter")), 0.03);
+    const rate = 0.25 * rateOf(st);
+    this.send("cloud", ctrl.cloud, p.muteCloud.value ? 0 : this.effective("cloud") * 0.9, 0.05);
+    this.send("slow", ctrl.slow, p.muteSlow.value ? 0 : 0.3, 0.05);
+    this.send("rate", ctrl.rate, rate, 0.1);
+    this.send("cutoff", ctrl.cutoff, cutoffHz(this.effective("filter")), 0.03);
   }
 
-  private send(key: string, param: { setTargetAtTime(v: number, t: number, tc: number): unknown }, value: number, timeConstant: number) {
+  private send(key: ControlKey, param: Settable, value: number, timeConstant: number) {
     const last = this.lastSent.get(key);
-    if (last !== undefined && Math.abs(last - value) < 0.002 * Math.max(1, Math.abs(value))) return;
-    this.lastSent.set(key, value);
-    param.setTargetAtTime(value, this.context.currentTime, timeConstant);
+    if (last !== undefined && Math.abs(last.value - value) < 0.002 * Math.max(1, Math.abs(value))) return;
+    this.lastSent.set(key, { value, tc: timeConstant });
+    const t = this.context.currentTime;
+    param.setTargetAtTime(value, t, timeConstant);
+    if (key === "rate") this.clock = advance(this.clock, t, value, timeConstant);
+    this.pending?.control.push({ t, key, value, tc: timeConstant });
   }
 
   destroy() {
-    this.cloud.destroy();
-    this.player.destroy();
+    this.voices.destroy();
     super.destroy();
   }
 
-  /* ---- recording (stub until the audio engine exists) ---- */
+  /* ---- recording ---- */
 
-  toggleRecording(): number | null {
-    const p = this.params.recordingSince;
-    if (p.value === null) { p.value = performance.now(); return null; }
-    const secs = (performance.now() - p.value) / 1000;
-    p.value = null;
-    return secs;
+  get recording() {
+    return this.recorder?.recording ?? false;
+  }
+
+  /** Gets recording ready (loads the worklet) so the first take starts cleanly. Safe to call repeatedly. */
+  async prepareRecording() {
+    const ctx = this.context;
+    if (!(ctx instanceof AudioContext)) return;
+    this.recorder ??= new Recorder(ctx, this.output);
+    await this.recorder.prepare();
+  }
+
+  /** Starts capturing the master output and logging the take (grains and control values). */
+  async startRecording() {
+    const ctx = this.context;
+    if (!(ctx instanceof AudioContext)) throw new Error("Recording needs a live audio context.");
+    if (ctx.state !== "running") throw new Error("Audio is off. Click anywhere on the page, then record.");
+    this.recorder ??= new Recorder(ctx, this.output);
+    const now = ctx.currentTime, s = this.params.sample.value;
+    const take: Take = {
+      id: ++this.takeCount, seed: this.params.seed.value, sampleRate: ctx.sampleRate, t0: 0, duration: 0, sample: s,
+      playerPhase: 0, grains: this.recentGrains.filter((g) => g.when + g.plan.duration > now - PREROLL), control: [], pcm: [],
+    };
+    // start the log from the full current state, so it doesn't depend on another frame arriving
+    this.pending = { take, clock: this.clock, control: [...this.lastSent].map(([key, v]) => ({ t: now, key, value: v.value, tc: v.tc })) };
+    try {
+      await this.recorder.start();
+    } catch (e) {
+      this.pending = null;
+      throw e;
+    }
+    this.params.recordingSince.value = performance.now();
+  }
+
+  /** Stops capturing and returns the finished take. */
+  async stopRecording(): Promise<Take> {
+    const pending = this.pending;
+    if (!pending || !this.recorder) throw new Error("Not recording.");
+    const rec = await this.recorder.stop();
+    this.pending = null;
+    this.params.recordingSince.value = null;
+    const take = pending.take, t0 = rec.startTime;
+    take.t0 = t0;
+    // loop position at the first captured frame: replay the rate events from the clock snapshot taken at start
+    let clock = pending.clock;
+    for (const e of pending.control) if (e.key === "rate" && e.t <= t0) clock = advance(clock, Math.max(clock.t, e.t), e.value, e.tc);
+    take.playerPhase = phaseAt(clock, t0, take.sample.duration);
+    take.duration = rec.channels[0].length / rec.sampleRate;
+    take.pcm = rec.channels;
+    take.control = pending.control.map((e) => ({ ...e, t: Math.max(0, e.t - t0) }));
+    take.grains = take.grains.filter((g) => g.when >= t0 - PREROLL && g.when <= t0 + take.duration);
+    this.lastTake = take;
+    return take;
   }
 
   static readonly gestureTypes = GESTURE_TYPES;

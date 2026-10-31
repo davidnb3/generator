@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { useValue } from "@audiorective/react";
+import type { EngineState } from "@audiorective/core";
 import { engine, EngineProvider } from "../audio/engine";
 import { GESTURE_TYPES } from "../audio/params";
 import { Knob } from "./Knob";
@@ -37,6 +39,15 @@ function Shortcuts() {
     addEventListener("keydown", on);
     return () => removeEventListener("keydown", on);
   }, [setLearnMode, manager]);
+  return null;
+}
+
+/** Prepares recording as soon as audio is running, so the first take doesn't pay for loading the worklet. */
+function RecorderWarmup() {
+  const state = useValue(engine.core.state as () => EngineState);
+  useEffect(() => {
+    if (state === "running") instrument.prepareRecording().catch(() => undefined);
+  }, [state]);
   return null;
 }
 
@@ -85,6 +96,7 @@ export function App() {
                 <GesturePanel />
                 <PerformancePanel />
                 <Shortcuts />
+                <RecorderWarmup />
               </div>
             </LearnClass>
           </MidiProvider>
