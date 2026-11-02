@@ -185,3 +185,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14p
 .knob.armed svg, #orb.armed { outline: 2px solid var(--accent-warm-hi); outline-offset: 3px; border-radius: 50%; animation: armed 1s ease-in-out infinite; }
 @keyframes armed { 50% { outline-color: transparent; } }
 .learn-banner { position: absolute; left: 50%; top: 68px; transform: translateX(-50%); padding: 6px 14px; border-radius: var(--r-pill); border: var(--bw) solid var(--accent-warm); background: rgba(246, 169, 68, 0.12); font-size: 12px; color: var(--accent-warm-hi); z-index: 5; }
+
+.room { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding: 4px 6px; border: var(--bw) solid var(--line); border-radius: var(--r-md); }
+.room-name { display: flex; flex-direction: column; align-items: center; line-height: 1.3; min-width: 0; }
+.room-name small { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-name b { font-weight: 500; font-size: 12.5px; }

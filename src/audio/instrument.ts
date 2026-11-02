@@ -8,6 +8,8 @@ import type { GrainEvent } from "./GranularCloud";
 import { cutoffHz, rateOf, semitones } from "./granularMath";
 import { Voices, type ControlKey, type Settable } from "./Voices";
 import { advance, initialClock, phaseAt, type PlayerClock } from "./playerClock";
+import type { HitEvent } from "./HitVoice";
+import type { RoomId } from "./rooms";
 import { Recorder } from "./export/recorder";
 import { PREROLL } from "./export/render";
 import type { ControlEvent, Take } from "./export/take";
@@ -20,6 +22,10 @@ type InstrumentParams = Record<NumericId, Param<number>> & {
   muteCloud: Param<boolean>;
   muteSlow: Param<boolean>;
   muteSpectral: Param<boolean>;
+  room: Param<RoomId>;
+  scatter: Param<boolean>;
+  octave: Param<boolean>;
+  stutter: Param<boolean>;
   gestureType: Param<GestureType>;
   gestureBars: Param<number>;
   gestureProgress: Param<number>;
@@ -27,6 +33,9 @@ type InstrumentParams = Record<NumericId, Param<number>> & {
   sample: Param<SampleInfo>;
   recordingSince: Param<number | null>;
 };
+
+/** Seconds control changes are scheduled ahead of the audio clock. */
+const CONTROL_LEAD = 0.02;
 
 interface RunningGesture { type: GestureType; t0: number; dur: number; impacted: boolean }
 
@@ -42,9 +51,11 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
   private recorder: Recorder | null = null;
   private pending: { take: Take; control: ControlEvent[]; clock: PlayerClock } | null = null; // control times are absolute until the take stops
   private recentGrains: GrainEvent[] = [];
+  private recentHits: HitEvent[] = [];
   private takeCount = 0;
   /** Slow-player clock: its position follows the logged rate curves exactly, so a take can say where the loop was. */
   private clock: PlayerClock = initialClock(0);
+  private playerStart = 0; // context time the slow player (re)starts; its rate is never scheduled before this
   /** The most recent recording, kept for Export WAV. */
   lastTake: Take | null = null;
   private rng: Rng;
@@ -82,6 +93,10 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
           muteCloud: param<boolean>({ default: false }),
           muteSlow: param<boolean>({ default: false }),
           muteSpectral: param<boolean>({ default: false }),
+          room: param<RoomId>({ default: "hall" }),
+          scatter: param<boolean>({ default: false }),
+          octave: param<boolean>({ default: false }),
+          stutter: param<boolean>({ default: false }),
           gestureType: param<GestureType>({ default: "riser" }),
           gestureBars: param<number>({ default: 8 }),
           gestureProgress: param<number>({ default: 0 }),
@@ -99,13 +114,35 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     voices.cloud.onGrain = (e) => {
       this.recentGrains.push(e);
       this.pending?.take.grains.push(e);
-      const cutoff = ctx.currentTime - 2;
-      if (this.recentGrains.length > 400) this.recentGrains = this.recentGrains.filter((g) => g.when > cutoff);
+      const cutoff = ctx.currentTime - 3;
+      if (this.recentGrains.length > 600) this.recentGrains = this.recentGrains.filter((g) => g.when > cutoff);
+    };
+    voices.hit.onHit = (e) => {
+      this.recentHits.push(e);
+      if (this.recentHits.length > 40) this.recentHits = this.recentHits.filter((h) => h.when + 6 > ctx.currentTime);
+      this.pending?.take.hits.push(e);
+    };
+    // The slow player must start at a known time, or a take can't say where its loop is. Starting at time 0 on a
+    // suspended context isn't one: the first audio after resume lands a few tens of ms later. So once the context
+    // is running, (re)start at an explicit time just ahead and anchor the clock to it.
+    let playerAnchored = false;
+    const startPlayer = () => {
+      // The engine starts a source on a render-quantum boundary (128 frames); starting between boundaries would put the
+      // loop up to a quantum behind the clock, so land on one.
+      const quantum = 128 / ctx.sampleRate, when = Math.ceil((ctx.currentTime + 0.1) / quantum) * quantum;
+      voices.setBuffer(this.params.sample.value.buffer, 0, when);
+      this.clock = initialClock(when);
+      this.playerStart = when;
+      this.lastSent.delete("rate"); // restarting the player resets its rate, so the next frame must send it again
+      playerAnchored = true;
     };
     this.effect(() => {
-      voices.setBuffer(this.params.sample.value.buffer, 0, ctx.currentTime);
-      this.clock = initialClock(ctx.currentTime);
+      const buffer = this.params.sample.value.buffer;
+      if (ctx.state === "running") startPlayer();
+      else { voices.setBuffer(buffer, 0, ctx.currentTime); playerAnchored = false; }
     });
+    ctx.addEventListener("statechange", () => { if (ctx.state === "running" && !playerAnchored) startPlayer(); });
+    this.effect(() => voices.setRoom(this.params.room.value, this.params.sample.value.buffer));
     if (ctx instanceof AudioContext) voices.cloud.start();
   }
 
@@ -170,6 +207,17 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     const type = this.params.gestureType.value;
     const dur = type === "drop" ? 2200 : Math.max(2500, this.params.gestureBars.value * 600);
     this.running = { type, t0: performance.now(), dur, impacted: false };
+    this.scheduleHits(type, dur / 1000);
+  }
+
+  /** The gesture's sound: a reversed swell into the hit, timed on the audio clock. */
+  private scheduleHits(type: GestureType, seconds: number) {
+    const start = this.context.currentTime + 0.05, hit = this.voices.hit;
+    const swellLen = Math.min(1.2, seconds * 0.6);
+    if (type === "drop") { hit.impact(start); return; }
+    const end = start + (type === "both" ? seconds * 0.75 : seconds);
+    hit.swell(end - swellLen, swellLen);
+    if (type === "both") hit.impact(end);
   }
   get gestureActive() {
     return this.running !== null;
@@ -218,6 +266,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     }
     live.rise = rise; live.drop = drop;
     this.boost = gestureBoost(rise, drop);
+    if (p.scatter.value) { this.boost.spray = (this.boost.spray ?? 0) + 0.5; this.boost.density = (this.boost.density ?? 0) + 0.15; }
 
     if (p.evolve.value && !p.orbHeld.value && !this.running) {
       if (now > this.nextTarget) {
@@ -258,13 +307,29 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     this.send("slow", ctrl.slow, p.muteSlow.value ? 0 : 0.3, 0.05);
     this.send("rate", ctrl.rate, rate, 0.1);
     this.send("cutoff", ctrl.cutoff, cutoffHz(this.effective("filter")), 0.03);
+
+    // effects: Space is the room's level, Spectral is the shifted layer's level and how far it shifts, Drive is how saturated, Wet blends them against the dry sound
+    const wet = p.wet.value, spectral = this.effective("spectral");
+    const drive = this.effective("drive");
+    this.send("drive", ctrl.drive, drive, 0.05);
+    this.send("makeup", ctrl.makeup, 1 / (1 + 6 * drive), 0.05); // measured: full drive is about 7x louder, and the boost fades in linearly with the blend
+    this.send("spectral", ctrl.spectral, p.muteSpectral.value ? 0 : spectral * wet * 1.2, 0.08);
+    this.send("shift", ctrl.shift, 20 * Math.pow(40, spectral), 0.12);
+    this.send("space", ctrl.space, this.effective("space") * wet * 1.2, 0.1);
+    this.send("dry", ctrl.dry, 1 - 0.4 * wet, 0.05);
+    c.octave.value = p.octave.value ? 0.5 : 0;
+    c.stutter.value = p.stutter.value;
   }
 
   private send(key: ControlKey, param: Settable, value: number, timeConstant: number) {
     const last = this.lastSent.get(key);
     if (last !== undefined && Math.abs(last.value - value) < 0.002 * Math.max(1, Math.abs(value))) return;
     this.lastSent.set(key, { value, tc: timeConstant });
-    const t = this.context.currentTime;
+    // Schedule a little ahead: a change stamped "now" is only applied once the audio thread sees it, by which time the
+    // stamp is in the past, and live and replay would disagree by a few ms per change. Rate also waits for the player
+    // to start, or the loop position (and its replay) would be wrong.
+    const ahead = this.context.currentTime + CONTROL_LEAD;
+    const t = key === "rate" ? Math.max(ahead, this.playerStart) : ahead;
     param.setTargetAtTime(value, t, timeConstant);
     if (key === "rate") this.clock = advance(this.clock, t, value, timeConstant);
     this.pending?.control.push({ t, key, value, tc: timeConstant });
@@ -298,7 +363,8 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     const now = ctx.currentTime, s = this.params.sample.value;
     const take: Take = {
       id: ++this.takeCount, seed: this.params.seed.value, sampleRate: ctx.sampleRate, t0: 0, duration: 0, sample: s,
-      playerPhase: 0, grains: this.recentGrains.filter((g) => g.when + g.plan.duration > now - PREROLL), control: [], pcm: [],
+      playerPhase: 0, grains: this.recentGrains.filter((g) => g.when + g.plan.duration > now - PREROLL),
+      hits: this.recentHits.filter((h) => h.when + 3 > now - PREROLL), room: this.params.room.value, control: [], pcm: [],
     };
     // start the log from the full current state, so it doesn't depend on another frame arriving
     this.pending = { take, clock: this.clock, control: [...this.lastSent].map(([key, v]) => ({ t: now, key, value: v.value, tc: v.tc })) };
@@ -328,6 +394,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     take.pcm = rec.channels;
     take.control = pending.control.map((e) => ({ ...e, t: Math.max(0, e.t - t0) }));
     take.grains = take.grains.filter((g) => g.when >= t0 - PREROLL && g.when <= t0 + take.duration);
+    take.hits = take.hits.filter((h) => h.when >= t0 - PREROLL && h.when <= t0 + take.duration);
     this.lastTake = take;
     return take;
   }

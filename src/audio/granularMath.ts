@@ -16,6 +16,7 @@ export interface GrainSettings {
   density: number; // 0..1
   spray: number; // 0..1: position jitter, pitch spread and pan width
   pitch: number; // semitones
+  octave: number; // 0..1 chance that a grain is shifted up an octave
 }
 
 export interface GrainPlan {
@@ -30,8 +31,8 @@ export interface GrainPlan {
 /** Plans one grain. The RNG call order is fixed so a seed always yields the same grains. */
 export function planGrain(s: GrainSettings, bufferSeconds: number, rng: Rng, reversed = false): GrainPlan {
   const duration = grainSeconds(s.size);
-  const jitterR = rng(), pitchR = rng(), panR = rng();
-  const st = s.pitch + (pitchR * 2 - 1) * s.spray * 1.2; // up to +-120 cents at full spray
+  const jitterR = rng(), pitchR = rng(), panR = rng(), octR = rng();
+  const st = s.pitch + (pitchR * 2 - 1) * s.spray * 1.2 + (octR < s.octave ? 12 : 0); // spread up to +-120 cents at full spray
   const rate = rateOf(st);
   const sourceSeconds = Math.min(bufferSeconds, duration * rate);
   const centre = wrap(s.position, 1) * bufferSeconds + (jitterR * 2 - 1) * s.spray * 0.3 * bufferSeconds;
@@ -48,3 +49,7 @@ export const nextInterval = (density: number, rng: Rng) => (1 / grainsPerSecond(
 export function hann(points = 32): Float32Array {
   return Float32Array.from({ length: points }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (points - 1)));
 }
+
+/** Stutter repeats one spot at a steady pulse: a sixteenth note at the given tempo, fixed grain size, no spray. */
+export const STUTTER = { size: 0.35, density: 0.3 };
+export const stutterInterval = (bpm: number) => 60 / bpm / 4;

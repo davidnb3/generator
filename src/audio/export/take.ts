@@ -1,5 +1,7 @@
 import type { ControlKey } from "../Voices";
 import type { GrainEvent } from "../GranularCloud";
+import type { HitEvent } from "../HitVoice";
+import type { RoomId } from "../rooms";
 import type { SampleInfo } from "../sample";
 
 /** One value sent to the audio graph: where it went, what it was, and how it was smoothed. */
@@ -18,6 +20,8 @@ export interface Take {
   sample: SampleInfo;
   playerPhase: number; // estimated slow-player position (seconds) at t0
   grains: GrainEvent[]; // `when` is absolute context time
+  hits: HitEvent[]; // gesture swells and impacts, absolute context time
+  room: RoomId; // the room when the take began; a render keeps it even if you change room mid-take
   control: ControlEvent[];
   pcm: Float32Array[];
 }

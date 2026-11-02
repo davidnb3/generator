@@ -132,7 +132,10 @@ Pill container (`--r-sm`, 3 px padding) with equal buttons, one selected. Select
 24 px square, `--r-xs`. Pressed state fills `--danger` with dark text. Mute only.
 
 ### Macro button
-62 px circular key with a 22 px line icon (1.6 px stroke) and a mono caption below. Active: amber icon and border, inner and outer amber glow, and an expanding ping ring every 2.2 s. Momentary actions (Re-roll, Resample) flash active for 0.5 to 0.7 s and show a toast. Toggles use `aria-pressed`.
+62 px circular key with a 22 px line icon (1.6 px stroke) and a mono caption below. Active: amber icon and border, inner and outer amber glow, and an expanding ping ring every 2.2 s. Momentary actions (Re-roll, Resample) flash active for 0.5 to 0.7 s and show a toast. Toggles (Freeze, Reverse, Scatter, Octave, Stutter, Evolve) use `aria-pressed`.
+
+### Room picker
+A compact stepper in the Voices panel: previous and next icon buttons around a name block (mono "Room" caption, the room name, and for "Your sample" the sample's name). It chooses what the Space knob sounds like. Cycles through six built-in rooms and "Your sample", wrapping at both ends. The name block is `aria-live="polite"` so a screen reader announces the change; the buttons have labels ("Previous room", "Next room"). Use this pattern for any choose-one-of-many setting with more options than a segmented control can hold.
 
 ### Primary button, Fire, Export
 Pill, `--grad-brand`, dark text (`--on-accent`). One per view region: Export WAV in the top bar, Fire in the Gesture panel. Fire shows progress as a white 45% fill growing from the left across the gesture duration. Hover brightens by 8% and lifts 1 px; press scales to 0.97.

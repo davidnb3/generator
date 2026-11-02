@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createRng } from "./rng";
-import { cutoffHz, grainSeconds, grainsPerSecond, hann, nextInterval, planGrain, semitones, wrap } from "./granularMath";
+import { cutoffHz, grainSeconds, grainsPerSecond, hann, nextInterval, planGrain, semitones, stutterInterval, wrap } from "./granularMath";
 
-const base = { position: 0.3, size: 0.5, density: 0.5, spray: 0.3, pitch: 0 };
+const base = { position: 0.3, size: 0.5, density: 0.5, spray: 0.3, pitch: 0, octave: 0 };
 
 describe("mappings", () => {
   it("cover their documented ranges", () => {
@@ -42,6 +42,23 @@ describe("planGrain", () => {
   });
   it("transposes by the pitch setting", () => {
     expect(planGrain({ ...base, spray: 0, pitch: 12 }, 8, createRng(3)).rate).toBeCloseTo(2);
+  });
+});
+
+describe("octave and stutter", () => {
+  it("octave chance 1 shifts every grain up 12 semitones; 0 never does", () => {
+    expect(planGrain({ ...base, spray: 0, octave: 1 }, 8, createRng(3)).rate).toBeCloseTo(2);
+    expect(planGrain({ ...base, spray: 0, octave: 0 }, 8, createRng(3)).rate).toBeCloseTo(1);
+  });
+  it("octave applies to about the chosen share of grains", () => {
+    const r = createRng(4);
+    let up = 0;
+    for (let i = 0; i < 2000; i++) if (planGrain({ ...base, spray: 0, octave: 0.5 }, 8, r).rate > 1.5) up++;
+    expect(up / 2000).toBeCloseTo(0.5, 1);
+  });
+  it("stutter pulses a sixteenth note", () => {
+    expect(stutterInterval(120)).toBeCloseTo(0.125);
+    expect(stutterInterval(84)).toBeCloseTo(60 / 84 / 4);
   });
 });
 

@@ -5,7 +5,7 @@ Upload a sound, shape it with granular, spectral and physics-driven sources, add
 modulation and randomness, fire risers and drops, and bounce everything to WAV for
 a DAW. Inspired by Native Instruments' Kinetic Metal.
 
-Status: Phase 0 done; Phase 1 mostly done (WAV export built). The React UI, orb keyboard control, MIDI learn, a real `GranularCloud` and the slow player make sound from the loaded sample. Next: the effects that are still stubs (space, drive, spectral), then Phase 2 gestures that trigger sound (impact hit), stems per layer, and a float32 option in the UI.
+Status: Phases 0 and 1 done; the sound path is complete (rooms, drive, spectral, wet, gesture hits, scatter, octave, stutter) and exports to WAV. The React UI, orb keyboard control, MIDI learn, a real `GranularCloud` and the slow player make sound from the loaded sample. Next: Phase 3 physics scene, then evolver macros, layers and stems, data feeds.
 
 ## Stack
 

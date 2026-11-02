@@ -1,6 +1,7 @@
 import { AudioProcessor, reverseBuffer, type Param, type SchedulableParam } from "@audiorective/core";
 import { createRng, type Rng } from "./rng";
-import { hann, nextInterval, planGrain, type GrainPlan } from "./granularMath";
+import { STUTTER, hann, nextInterval, planGrain, stutterInterval, type GrainPlan } from "./granularMath";
+import { BPM } from "./params";
 
 /** A grain that was created: when it starts (context seconds) and exactly what it plays. */
 export interface GrainEvent { when: number; plan: GrainPlan; reversed: boolean }
@@ -13,6 +14,8 @@ type CloudParams = {
   pitch: Param<number>; // semitones
   playhead: Param<number>; // 0..1, set by the instrument; the cloud reads at playhead + position
   reverse: Param<boolean>;
+  octave: Param<number>; // 0..1 chance of an octave-up grain
+  stutter: Param<boolean>; // repeat the current spot on a sixteenth-note pulse
   level: SchedulableParam;
 };
 
@@ -32,6 +35,7 @@ export class GranularCloud extends AudioProcessor<CloudParams> {
   private rng: Rng;
   private nextTime = 0;
   private active = 0;
+  private latch: number | null = null; // where stutter is holding, as a 0..1 position
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly window = hann();
   /** Called for every grain that is created; a recording uses it to log the take. */
@@ -48,6 +52,8 @@ export class GranularCloud extends AudioProcessor<CloudParams> {
         pitch: param<number>({ default: 0, min: -12, max: 12 }),
         playhead: param<number>({ default: 0, min: 0, max: 1 }),
         reverse: param<boolean>({ default: false }),
+        octave: param<number>({ default: 0, min: 0, max: 1 }),
+        stutter: param<boolean>({ default: false }),
         level: param({ default: 0.8, bind: out.gain }),
       },
       latency: 0,
@@ -84,16 +90,19 @@ export class GranularCloud extends AudioProcessor<CloudParams> {
     if (reversed && !this._reversed) this._reversed = reverseBuffer(buffer);
     const source = reversed ? this._reversed! : buffer;
     if (this.nextTime < this.context.currentTime) this.nextTime = this.context.currentTime + 0.01;
+    const stutter = p.stutter.value;
+    if (stutter && this.latch === null) this.latch = p.playhead.value + p.position.value;
+    if (!stutter) this.latch = null;
     while (this.nextTime < until) {
-      const plan = planGrain(
-        { position: p.playhead.value + p.position.value, size: p.size.value, density: p.density.value, spray: p.spray.value, pitch: p.pitch.value },
-        buffer.duration, this.rng, reversed,
-      );
+      const settings = stutter
+        ? { position: this.latch!, size: STUTTER.size, density: STUTTER.density, spray: 0, pitch: p.pitch.value, octave: 0 }
+        : { position: p.playhead.value + p.position.value, size: p.size.value, density: p.density.value, spray: p.spray.value, pitch: p.pitch.value, octave: p.octave.value };
+      const plan = planGrain(settings, buffer.duration, this.rng, reversed);
       if (this.active < MAX_GRAINS) {
         this.spawn(source, plan, this.nextTime);
         this.onGrain?.({ when: this.nextTime, plan, reversed });
       }
-      this.nextTime += nextInterval(p.density.value, this.rng);
+      this.nextTime += stutter ? stutterInterval(BPM) : nextInterval(p.density.value, this.rng);
     }
   }
 

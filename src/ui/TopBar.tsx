@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { type EngineState } from "@audiorective/core";
 import { useValue } from "@audiorective/react";
 import { engine } from "../audio/engine";
+import { BPM } from "../audio/params";
 import { downloadBytes, encodeWav } from "../audio/export/wav";
 import { renderTake } from "../audio/export/render";
 import { useMidi, useToast } from "./context";
@@ -94,7 +95,7 @@ export function TopBar() {
       <div className="top-r">
         <AudioState />
         <Midi />
-        <div className="stat"><small>BPM</small><b>84</b></div>
+        <div className="stat"><small>BPM</small><b>{BPM}</b></div>
         <div className="stat"><small>SEED</small><b>{seed}</b></div>
         <button className="rec" aria-pressed={since !== null} onClick={() => void toggleRec()}><i /><span ref={rec}>REC</span></button>
         <button className="btn-primary" disabled={busy} onClick={() => void exportWav()}>Export WAV</button>

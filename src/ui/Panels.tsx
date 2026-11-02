@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useValue } from "@audiorective/react";
 import { engine } from "../audio/engine";
 import { GESTURE_BARS, MODULATED, type GestureType } from "../audio/params";
+import { ROOM_CHOICES } from "../audio/rooms";
 import { Meters, MiniWave, GestureCurves } from "./Canvases";
 import { MacroButton, Panel, Segmented, Switch } from "./Controls";
 import { useToast } from "./context";
@@ -78,6 +79,25 @@ function Layer({ name, warm, level, mute }: { name: string; warm?: boolean; leve
   );
 }
 
+function RoomPicker() {
+  const room = useValue(p.room);
+  const sample = useValue(p.sample);
+  const i = ROOM_CHOICES.findIndex((r) => r.id === room);
+  const step = (d: number) => (p.room.value = ROOM_CHOICES[(i + d + ROOM_CHOICES.length) % ROOM_CHOICES.length].id);
+  const current = ROOM_CHOICES[i];
+  return (
+    <div className="room" role="group" aria-label="Room for the Space knob">
+      <button className="icon-btn" aria-label="Previous room" onClick={() => step(-1)}>‹</button>
+      <div className="room-name" aria-live="polite">
+        <small>Room</small>
+        <b>{current.label}</b>
+        {room === "sample" && <small>{sample.synthetic ? "demo texture" : sample.name}</small>}
+      </div>
+      <button className="icon-btn" aria-label="Next room" onClick={() => step(1)}>›</button>
+    </div>
+  );
+}
+
 export function VoicesPanel() {
   const reverse = useValue(p.reverse);
   const wet = useValue(p.wet);
@@ -88,6 +108,7 @@ export function VoicesPanel() {
         <Knob param={p.spectral} heardId="spectral" target="spectral" label="Spectral" size={108} big grad="A" style={{ left: 122, top: 0, position: "absolute" }} />
       </div>
       <div className="row-sw"><span>Reverse</span><Switch on={reverse} onChange={(v) => (p.reverse.value = v)} label="Reverse" /></div>
+      <RoomPicker />
       <h4 className="sp"><i className="dot a" />Layers</h4>
       <Layer name="Grain cloud" level={0} mute={p.muteCloud} />
       <Layer name="Slow player" level={1} mute={p.muteSlow} />
@@ -125,6 +146,7 @@ export function GesturePanel() {
 export function PerformancePanel() {
   const toast = useToast();
   const evolve = useValue(p.evolve), freeze = useValue(p.freeze), reverse = useValue(p.reverse);
+  const scatter = useValue(p.scatter), octave = useValue(p.octave), stutter = useValue(p.stutter);
   const [flash, setFlash] = useState<string | null>(null);
   const db = useRef<HTMLSpanElement>(null);
   const momentary = (k: string, ms: number) => { setFlash(k); window.setTimeout(() => setFlash(null), ms); };
@@ -134,9 +156,9 @@ export function PerformancePanel() {
       <div className="macros">
         {Btn("freeze", "Freeze", freeze, () => (p.freeze.value = !freeze))}
         {Btn("reverse", "Reverse", reverse, () => (p.reverse.value = !reverse))}
-        {Btn("scatter", "Scatter", false, () => toast("Scatter arrives with the granular engine."))}
-        {Btn("octave", "Octave", false, () => toast("Octave arrives with the granular engine."))}
-        {Btn("stutter", "Stutter", false, () => toast("Stutter arrives with the granular engine."))}
+        {Btn("scatter", "Scatter", scatter, () => (p.scatter.value = !scatter))}
+        {Btn("octave", "Octave", octave, () => (p.octave.value = !octave))}
+        {Btn("stutter", "Stutter", stutter, () => (p.stutter.value = !stutter))}
         {Btn("evolve", "Evolve", evolve, () => (p.evolve.value = !evolve))}
         {Btn("resample", "Resample", flash === "resample", () => { momentary("resample", 700); toast("Resample: last 8 bars captured as a new source (prototype)"); })}
         {Btn("reroll", "Re-roll", flash === "reroll", () => { momentary("reroll", 500); instrument.setSeed((Math.random() * 9000 + 1000) | 0); })}

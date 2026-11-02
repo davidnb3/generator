@@ -26,3 +26,5 @@ export type NumericId = ModulatedId | PlainId | "orbX" | "orbY";
 export const GESTURE_TYPES = ["riser", "drop", "both"] as const;
 export type GestureType = (typeof GESTURE_TYPES)[number];
 export const GESTURE_BARS = [4, 8, 16] as const;
+
+export const BPM = 84;
