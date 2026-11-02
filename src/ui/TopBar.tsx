@@ -50,13 +50,13 @@ export function TopBar() {
       downloadBytes(name, encodeWav(take.pcm, take.sampleRate));
       toast(`Saved ${name} · ${take.duration.toFixed(1)} s, 24-bit stereo. Export WAV re-renders this take offline.`);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Recording failed. Try again.");
+      toast(e instanceof Error ? e.message : "Recording failed. Try again.", "error");
     }
   };
 
   const exportWav = async () => {
     const take = instrument.lastTake;
-    if (!take) { toast("Record a take first, then export it."); return; }
+    if (!take) { toast("Record a take first, then export it.", "error"); return; }
     setBusy(true);
     toast("Rendering…");
     try {
@@ -65,7 +65,7 @@ export function TopBar() {
       downloadBytes(name, encodeWav(r.channels, r.sampleRate));
       toast(`Saved ${name} · offline render, 24-bit stereo`);
     } catch {
-      toast("Couldn't render that take. Try recording it again.");
+      toast("Couldn't render that take. Try recording it again.", "error");
     } finally {
       setBusy(false);
     }

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useValue } from "@audiorective/react";
 import { engine } from "../audio/engine";
 import { lerp } from "../audio/modulation";
+import { progress } from "./anim";
 import { useMidi } from "./context";
 import { useFrame } from "./frameBus";
 import { getTheme } from "./theme";
@@ -101,13 +102,13 @@ export function Orb() {
 
     shocks.current = shocks.current.filter((s) => now - s.t0 < 1300);
     shocks.current.forEach((s) => {
-      const k = (now - s.t0) / 1300;
+      const k = progress(now, s.t0, 1300);
       c.strokeStyle = `rgba(255,214,150,${(1 - k) * 0.85})`; c.lineWidth = 1 + 5 * (1 - k);
       c.beginPath(); c.arc(CX, CY, easeOut(k) * RR * 1.06, 0, TAU); c.stroke();
     });
     ripples.current = ripples.current.filter((r) => now - r.t0 < 1400);
     ripples.current.forEach((r) => {
-      const k = (now - r.t0) / 1400;
+      const k = progress(now, r.t0, 1400);
       c.strokeStyle = `rgba(${T.rgb.violet200},${(1 - k) * 0.6})`; c.lineWidth = 1.2;
       c.beginPath(); c.arc(px, py, easeOut(k) * (r.big ? 90 : 56), 0, TAU); c.stroke();
     });

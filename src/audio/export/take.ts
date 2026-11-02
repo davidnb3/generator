@@ -18,7 +18,9 @@ export interface Take {
   t0: number; // context time of the first captured frame
   duration: number; // seconds
   sample: SampleInfo;
-  playerPhase: number; // estimated slow-player position (seconds) at t0
+  playerPhase: number; // slow-player position (seconds) at t0, in the buffer it was playing
+  originalPhase: number; // position of the original-sample loop at t0
+  slowReversed: boolean; // whether the slow loop was playing the reversed sample when the take began
   grains: GrainEvent[]; // `when` is absolute context time
   hits: HitEvent[]; // gesture swells and impacts, absolute context time
   room: RoomId; // the room when the take began; a render keeps it even if you change room mid-take

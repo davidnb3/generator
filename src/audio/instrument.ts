@@ -8,6 +8,7 @@ import type { GrainEvent } from "./GranularCloud";
 import { cutoffHz, rateOf, semitones } from "./granularMath";
 import { Voices, type ControlKey, type Settable } from "./Voices";
 import { advance, initialClock, phaseAt, type PlayerClock } from "./playerClock";
+import { SCALE, crossfade, meterPosition, rmsOf } from "./mix";
 import type { HitEvent } from "./HitVoice";
 import type { RoomId } from "./rooms";
 import { Recorder } from "./export/recorder";
@@ -21,6 +22,7 @@ type InstrumentParams = Record<NumericId, Param<number>> & {
   orbHeld: Param<boolean>;
   muteCloud: Param<boolean>;
   muteSlow: Param<boolean>;
+  muteDrone: Param<boolean>;
   muteSpectral: Param<boolean>;
   room: Param<RoomId>;
   scatter: Param<boolean>;
@@ -56,6 +58,11 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
   /** Slow-player clock: its position follows the logged rate curves exactly, so a take can say where the loop was. */
   private clock: PlayerClock = initialClock(0);
   private playerStart = 0; // context time the slow player (re)starts; its rate is never scheduled before this
+  private originalStart = 0; // context time the original-sample loop started (it always runs at normal speed)
+  private slowReversed = false; // whether the slow loop is playing the reversed sample
+  private bufferNow: AudioBuffer | null = null;
+  private taps: AnalyserNode[] = []; // layer meters, then master left and right (live only)
+  private tapBuf = new Float32Array(1024);
   /** The most recent recording, kept for Export WAV. */
   lastTake: Take | null = null;
   private rng: Rng;
@@ -70,9 +77,9 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     rise: 0,
     drop: 0,
     impacts: 0, // increments on every gesture hit; views react by comparing with their last seen value
-    level: [0.3, 0.3, 0.2] as number[], // placeholder meters until the audio engine exists
-    meter: [0.4, 0.4] as number[],
-    db: -9,
+    level: [0, 0, 0, 0] as number[], // layer meters (cloud, slow, drone, spectral), 0..1, measured from the audio
+    meter: [0, 0] as number[], // master left and right
+    db: -60,
   };
 
   constructor(ctx: BaseAudioContext) {
@@ -92,6 +99,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
           orbHeld: param<boolean>({ default: false }),
           muteCloud: param<boolean>({ default: false }),
           muteSlow: param<boolean>({ default: false }),
+          muteDrone: param<boolean>({ default: false }),
           muteSpectral: param<boolean>({ default: false }),
           room: param<RoomId>({ default: "hall" }),
           scatter: param<boolean>({ default: false }),
@@ -111,12 +119,14 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     this._out = voices.output;
     this.rng = createRng(this.params.seed.value);
 
-    voices.cloud.onGrain = (e) => {
+    const onGrain = (e: GrainEvent) => {
       this.recentGrains.push(e);
       this.pending?.take.grains.push(e);
       const cutoff = ctx.currentTime - 3;
-      if (this.recentGrains.length > 600) this.recentGrains = this.recentGrains.filter((g) => g.when > cutoff);
+      if (this.recentGrains.length > 900) this.recentGrains = this.recentGrains.filter((g) => g.when > cutoff);
     };
+    voices.cloud.onGrain = onGrain;
+    voices.drone.onGrain = onGrain;
     voices.hit.onHit = (e) => {
       this.recentHits.push(e);
       if (this.recentHits.length > 40) this.recentHits = this.recentHits.filter((h) => h.when + 6 > ctx.currentTime);
@@ -126,28 +136,56 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     // suspended context isn't one: the first audio after resume lands a few tens of ms later. So once the context
     // is running, (re)start at an explicit time just ahead and anchor the clock to it.
     let playerAnchored = false;
+    const quantize = (t: number) => { const q = 128 / ctx.sampleRate; return Math.ceil(t / q) * q; };
     const startPlayer = () => {
       // The engine starts a source on a render-quantum boundary (128 frames); starting between boundaries would put the
       // loop up to a quantum behind the clock, so land on one.
-      const quantum = 128 / ctx.sampleRate, when = Math.ceil((ctx.currentTime + 0.1) / quantum) * quantum;
-      voices.setBuffer(this.params.sample.value.buffer, 0, when);
+      const when = quantize(ctx.currentTime + 0.1);
+      voices.setBuffer(this.bufferNow!, { when, slowReversed: this.slowReversed });
       this.clock = initialClock(when);
       this.playerStart = when;
+      this.originalStart = when;
       this.lastSent.delete("rate"); // restarting the player resets its rate, so the next frame must send it again
       playerAnchored = true;
     };
     this.effect(() => {
       const buffer = this.params.sample.value.buffer;
+      this.bufferNow = buffer;
       if (ctx.state === "running") startPlayer();
-      else { voices.setBuffer(buffer, 0, ctx.currentTime); playerAnchored = false; }
+      else { voices.setBuffer(buffer, { when: ctx.currentTime, slowReversed: this.slowReversed }); playerAnchored = false; }
     });
     ctx.addEventListener("statechange", () => { if (ctx.state === "running" && !playerAnchored) startPlayer(); });
+    // Reverse also plays the slow loop backwards: restart it on the mirrored spot of the other direction.
+    this.effect(() => {
+      const reversed = this.params.reverse.value;
+      if (reversed === this.slowReversed) return;
+      this.slowReversed = reversed;
+      if (!playerAnchored || ctx.state !== "running" || !this.bufferNow) return;
+      const when = quantize(ctx.currentTime + 0.1), dur = this.bufferNow.duration;
+      const offset = dur - phaseAt(this.clock, when, dur);
+      voices.restartSlow(this.bufferNow, when, offset, reversed);
+      this.clock = { ...initialClock(when), phase: offset };
+      this.playerStart = when;
+      this.lastSent.delete("rate");
+    });
     this.effect(() => voices.setRoom(this.params.room.value, this.params.sample.value.buffer));
-    if (ctx instanceof AudioContext) voices.cloud.start();
+    if (ctx instanceof AudioContext) {
+      voices.cloud.start();
+      voices.drone.start();
+      // meters measure the real audio: one analyser per layer, and a left and right one on the master output
+      const tap = (node: AudioNode) => { const a = new AnalyserNode(ctx, { fftSize: 1024 }); node.connect(a); return a; };
+      const split = new ChannelSplitterNode(ctx, { numberOfOutputs: 2 });
+      this.output.connect(split);
+      const side = (c: number) => { const a = new AnalyserNode(ctx, { fftSize: 1024 }); split.connect(a, c); return a; };
+      this.taps = [...voices.layerTaps.map(tap), side(0), side(1)];
+    }
   }
 
   get cloud() {
     return this.voices.cloud;
+  }
+  get drone() {
+    return this.voices.drone;
   }
 
   get output() {
@@ -229,6 +267,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     this.params.seed.value = seed;
     this.rng = createRng(seed);
     this.cloud.reseed(seed);
+    this.drone.reseed(seed + 1);
   }
 
   /* ---- sample ---- */
@@ -266,7 +305,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     }
     live.rise = rise; live.drop = drop;
     this.boost = gestureBoost(rise, drop);
-    if (p.scatter.value) { this.boost.spray = (this.boost.spray ?? 0) + 0.5; this.boost.density = (this.boost.density ?? 0) + 0.15; }
+    if (p.scatter.value) { const a = p.scatterAmt.value; this.boost.spray = (this.boost.spray ?? 0) + a; this.boost.density = (this.boost.density ?? 0) + 0.3 * a; }
 
     if (p.evolve.value && !p.orbHeld.value && !this.running) {
       if (now > this.nextTarget) {
@@ -281,20 +320,25 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
 
     this.applyAudio();
 
-    // placeholder meters (cosmetic, so Math.random is fine; no sound is produced yet)
-    const dens = this.effective("density"), pitch = this.effective("pitch"), space = this.effective("space"), filter = this.effective("filter");
-    const target = [0.25 + dens * 0.7, 0.2 + (1 - pitch) * 0.3 + (p.reverse.value ? 0.2 : 0), 0.1 + space * 0.5 + filter * 0.2];
-    const muted = [p.muteCloud.value, p.muteSlow.value, p.muteSpectral.value];
-    const f = 1 - Math.pow(0.6, dt / 16.7);
-    target.forEach((tg, i) => (live.level[i] = lerp(live.level[i], muted[i] ? 0 : clamp(tg + (Math.random() - 0.5) * 0.25), f)));
-    const master = ((live.level[0] + live.level[1] + live.level[2]) / 3) * (0.4 + p.wet.value * 0.4);
-    for (let c = 0; c < 2; c++) live.meter[c] = lerp(live.meter[c], clamp(master + (Math.random() - 0.5) * 0.15), f);
-    live.db = -30 + master * 28;
+    this.readMeters(dt);
+  }
+
+  /** Reads the real levels. Attack is instant and the fall is smoothed, so short sounds still show. */
+  private readMeters(dt: number) {
+    if (this.taps.length === 0) return;
+    const live = this.live, fall = 1 - Math.pow(0.85, dt / 16.7), buf = this.tapBuf;
+    const read = (a: AnalyserNode) => { a.getFloatTimeDomainData(buf); return rmsOf(buf); };
+    const settle = (prev: number, next: number) => (next > prev ? next : prev + (next - prev) * fall);
+    for (let i = 0; i < 4; i++) live.level[i] = settle(live.level[i], meterPosition(read(this.taps[i])));
+    const l = read(this.taps[4]), r = read(this.taps[5]);
+    live.meter[0] = settle(live.meter[0], meterPosition(l));
+    live.meter[1] = settle(live.meter[1], meterPosition(r));
+    live.db = 20 * Math.log10(Math.max(l, r, 1e-6));
   }
 
   /** Pushes the values you hear to the audio graph. Smoothed, and only sent when they change. */
   private applyAudio() {
-    const p = this.params, c = this.voices.cloud.params, st = semitones(this.effective("pitch")), ctrl = this.voices.control;
+    const p = this.params, c = this.voices.cloud.params, d = this.voices.drone.params, st = semitones(this.effective("pitch")), ctrl = this.voices.control;
     c.position.value = this.effective("position");
     c.size.value = this.effective("size");
     c.density.value = this.effective("density");
@@ -302,23 +346,48 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     c.pitch.value = st;
     c.playhead.value = this.live.head;
     c.reverse.value = p.reverse.value;
-    const rate = 0.25 * rateOf(st);
-    this.send("cloud", ctrl.cloud, p.muteCloud.value ? 0 : this.effective("cloud") * 0.9, 0.05);
-    this.send("slow", ctrl.slow, p.muteSlow.value ? 0 : 0.3, 0.05);
-    this.send("rate", ctrl.rate, rate, 0.1);
-    this.send("cutoff", ctrl.cutoff, cutoffHz(this.effective("filter")), 0.03);
+    c.octave.value = p.octave.value ? p.octaveAmt.value : 0;
+    // The drone (first version): the same grain engine with very long, heavily overlapping grains, an octave down, so
+    // the grains melt into one sustained sound. It follows Position, Freeze and Reverse with the grain cloud.
+    d.position.value = c.position.value;
+    d.playhead.value = this.live.head;
+    d.reverse.value = p.reverse.value;
+    d.size.value = 0.93;
+    d.density.value = 0.2;
+    d.spray.value = 0.12;
+    d.pitch.value = -12;
+    d.octave.value = 0;
 
-    // effects: Space is the room's level, Spectral is the shifted layer's level and how far it shifts, Drive is how saturated, Wet blends them against the dry sound
-    const wet = p.wet.value, spectral = this.effective("spectral");
-    const drive = this.effective("drive");
+    // layers: each knob is that layer's level
+    this.send("cloud", ctrl.cloud, p.muteCloud.value ? 0 : this.effective("cloud") * SCALE.cloud, 0.05);
+    this.send("slow", ctrl.slow, p.muteSlow.value ? 0 : this.effective("slow") * SCALE.slow, 0.05);
+    this.send("drone", ctrl.drone, p.muteDrone.value ? 0 : this.effective("drone") * SCALE.drone, 0.05);
+    this.send("rate", ctrl.rate, 0.25 * rateOf(st), 0.1);
+
+    // Spectral is a frequency-shifted copy of all the layers: its knob is the copy's level and also how far it shifts
+    const spectral = this.effective("spectral"), drive = this.effective("drive");
+    this.send("spectral", ctrl.spectral, p.muteSpectral.value ? 0 : spectral * SCALE.spectral, 0.08);
+    this.send("shift", ctrl.shift, 20 * Math.pow(40, spectral), 0.12);
     this.send("drive", ctrl.drive, drive, 0.05);
     this.send("makeup", ctrl.makeup, 1 / (1 + 6 * drive), 0.05); // measured: full drive is about 7x louder, and the boost fades in linearly with the blend
-    this.send("spectral", ctrl.spectral, p.muteSpectral.value ? 0 : spectral * wet * 1.2, 0.08);
-    this.send("shift", ctrl.shift, 20 * Math.pow(40, spectral), 0.12);
-    this.send("space", ctrl.space, this.effective("space") * wet * 1.2, 0.1);
-    this.send("dry", ctrl.dry, 1 - 0.4 * wet, 0.05);
-    c.octave.value = p.octave.value ? 0.5 : 0;
-    c.stutter.value = p.stutter.value;
+    this.send("cutoff", ctrl.cutoff, cutoffHz(this.effective("filter")), 0.03);
+
+    // room: Space is an equal-power Dry/Wet between the layers' sound and the room
+    const room = crossfade(this.effective("space"));
+    this.send("dry", ctrl.dry, room.a, 0.05);
+    this.send("space", ctrl.space, room.b * SCALE.room, 0.1);
+
+    // Dry/Wet: your original sample, unprocessed, against everything generated (layers, effects, room)
+    const mix = crossfade(p.wet.value);
+    this.send("wet", ctrl.wet, mix.b, 0.05);
+    this.send("original", ctrl.original, mix.a * SCALE.original, 0.05);
+
+    // Stutter repeats the last sixteenth note of the whole sound; its amount is the loop against the live sound
+    const stutter = p.stutter.value, loop = crossfade(stutter ? p.stutterAmt.value : 0);
+    this.send("stIn", ctrl.stIn, stutter ? 0 : 1, 0.003);
+    this.send("stFb", ctrl.stFb, stutter ? 1 : 0, 0.003);
+    this.send("stWet", ctrl.stWet, stutter ? loop.b : 0, 0.02);
+    this.send("stDry", ctrl.stDry, stutter ? loop.a : 1, 0.02);
   }
 
   private send(key: ControlKey, param: Settable, value: number, timeConstant: number) {
@@ -363,7 +432,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     const now = ctx.currentTime, s = this.params.sample.value;
     const take: Take = {
       id: ++this.takeCount, seed: this.params.seed.value, sampleRate: ctx.sampleRate, t0: 0, duration: 0, sample: s,
-      playerPhase: 0, grains: this.recentGrains.filter((g) => g.when + g.plan.duration > now - PREROLL),
+      playerPhase: 0, originalPhase: 0, slowReversed: this.slowReversed, grains: this.recentGrains.filter((g) => g.when + g.plan.duration > now - PREROLL),
       hits: this.recentHits.filter((h) => h.when + 3 > now - PREROLL), room: this.params.room.value, control: [], pcm: [],
     };
     // start the log from the full current state, so it doesn't depend on another frame arriving
@@ -390,6 +459,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     let clock = pending.clock;
     for (const e of pending.control) if (e.key === "rate" && e.t <= t0) clock = advance(clock, Math.max(clock.t, e.t), e.value, e.tc);
     take.playerPhase = phaseAt(clock, t0, take.sample.duration);
+    take.originalPhase = (((t0 - this.originalStart) % take.sample.duration) + take.sample.duration) % take.sample.duration;
     take.duration = rec.channels[0].length / rec.sampleRate;
     take.pcm = rec.channels;
     take.control = pending.control.map((e) => ({ ...e, t: Math.max(0, e.t - t0) }));

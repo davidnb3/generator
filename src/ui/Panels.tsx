@@ -4,7 +4,8 @@ import { engine } from "../audio/engine";
 import { GESTURE_BARS, MODULATED, type GestureType } from "../audio/params";
 import { ROOM_CHOICES } from "../audio/rooms";
 import { Meters, MiniWave, GestureCurves } from "./Canvases";
-import { MacroButton, Panel, Segmented, Switch } from "./Controls";
+import type { Param } from "@audiorective/core";
+import { MacroButton, MacroKnob, Panel, Segmented } from "./Controls";
 import { useToast } from "./context";
 import { useFrame } from "./frameBus";
 import { Knob } from "./Knob";
@@ -13,7 +14,7 @@ const { instrument } = engine;
 const p = instrument.params;
 
 const MAP_ROWS: { axis: "x" | "y"; id: (typeof MODULATED)[number]["id"]; label: string }[] = [
-  { axis: "x", id: "size", label: "Grain size" }, { axis: "x", id: "filter", label: "Filter" }, { axis: "x", id: "space", label: "Space" },
+  { axis: "x", id: "size", label: "Grain size" }, { axis: "x", id: "filter", label: "Filter" }, { axis: "x", id: "space", label: "Room mix" },
   { axis: "y", id: "density", label: "Density" }, { axis: "y", id: "pitch", label: "Pitch spread" }, { axis: "y", id: "drive", label: "Drive" },
 ];
 
@@ -35,7 +36,8 @@ export function SourcePanel() {
   const [over, setOver] = useState(false);
   const load = async (f: File) => {
     const r = await instrument.loadSample(f);
-    toast(r.ok ? `Loaded ${r.sample.name}` : r.error);
+    if (r.ok) toast(`Loaded ${r.sample.name}`);
+    else toast(r.error, "error");
   };
   const meta = `${sample.duration.toFixed(1)} s · ${(sample.sampleRate / 1000).toFixed(1)} kHz · ${sample.channels === 1 ? "mono" : sample.channels === 2 ? "stereo" : `${sample.channels} ch`}${sample.synthetic ? " · demo" : ""}`;
   return (
@@ -79,6 +81,18 @@ function Layer({ name, warm, level, mute }: { name: string; warm?: boolean; leve
   );
 }
 
+/** A Dry/Wet slider. The labels stay "Dry" and "Wet"; what it mixes is named by the section it sits in. */
+function DryWet({ param, label }: { param: Param<number>; label: string }) {
+  const v = useValue(param);
+  return (
+    <div className="wet">
+      <span>Dry</span>
+      <input type="range" min={0} max={100} value={Math.round(v * 100)} aria-label={label} style={{ ["--fill" as string]: `${v * 100}%` }} onChange={(e) => (param.value = +e.target.value / 100)} />
+      <span>Wet</span>
+    </div>
+  );
+}
+
 function RoomPicker() {
   const room = useValue(p.room);
   const sample = useValue(p.sample);
@@ -86,38 +100,37 @@ function RoomPicker() {
   const step = (d: number) => (p.room.value = ROOM_CHOICES[(i + d + ROOM_CHOICES.length) % ROOM_CHOICES.length].id);
   const current = ROOM_CHOICES[i];
   return (
-    <div className="room" role="group" aria-label="Room for the Space knob">
-      <button className="icon-btn" aria-label="Previous room" onClick={() => step(-1)}>‹</button>
-      <div className="room-name" aria-live="polite">
-        <small>Room</small>
-        <b>{current.label}</b>
-        {room === "sample" && <small>{sample.synthetic ? "demo texture" : sample.name}</small>}
+    <div role="group" aria-label="Room">
+      <div className="room">
+        <button className="icon-btn" aria-label="Previous room" onClick={() => step(-1)}>‹</button>
+        <div className="room-name" aria-live="polite">
+          <small>Room</small>
+          <b>{current.label}</b>
+          {room === "sample" && <small>{sample.synthetic ? "demo texture" : sample.name}</small>}
+        </div>
+        <button className="icon-btn" aria-label="Next room" onClick={() => step(1)}>›</button>
       </div>
-      <button className="icon-btn" aria-label="Next room" onClick={() => step(1)}>›</button>
+      <DryWet param={p.space} label="Room dry wet" />
     </div>
   );
 }
 
 export function VoicesPanel() {
-  const reverse = useValue(p.reverse);
-  const wet = useValue(p.wet);
   return (
     <Panel id="pRight" delay={3} style={{ left: 1156, top: 80, width: 260, height: 560 }} title={<><i className="dot" />Voices</>}>
-      <div className="bigs">
-        <Knob param={p.cloud} heardId="cloud" target="cloud" label="Cloud" size={108} big style={{ left: 2, top: 0, position: "absolute" }} />
-        <Knob param={p.spectral} heardId="spectral" target="spectral" label="Spectral" size={108} big grad="A" style={{ left: 122, top: 0, position: "absolute" }} />
+      <div className="layer-knobs">
+        <Knob param={p.cloud} heardId="cloud" target="cloud" label="Cloud" size={84} big />
+        <Knob param={p.slow} heardId="slow" target="slow" label="Slow" size={84} big />
+        <Knob param={p.drone} heardId="drone" target="drone" label="Drone" size={84} big />
+        <Knob param={p.spectral} heardId="spectral" target="spectral" label="Spectral" size={84} big grad="A" />
       </div>
-      <div className="row-sw"><span>Reverse</span><Switch on={reverse} onChange={(v) => (p.reverse.value = v)} label="Reverse" /></div>
-      <RoomPicker />
+      <DryWet param={p.wet} label="Dry wet" />
       <h4 className="sp"><i className="dot a" />Layers</h4>
       <Layer name="Grain cloud" level={0} mute={p.muteCloud} />
       <Layer name="Slow player" level={1} mute={p.muteSlow} />
-      <Layer name="Spectral" warm level={2} mute={p.muteSpectral} />
-      <div className="wet">
-        <span>Dry</span>
-        <input type="range" min={0} max={100} value={Math.round(wet * 100)} aria-label="Dry wet" style={{ ["--fill" as string]: `${wet * 100}%` }} onChange={(e) => (p.wet.value = +e.target.value / 100)} />
-        <span>Wet</span>
-      </div>
+      <Layer name="Drone" level={2} mute={p.muteDrone} />
+      <Layer name="Spectral" warm level={3} mute={p.muteSpectral} />
+      <RoomPicker />
     </Panel>
   );
 }
@@ -147,6 +160,8 @@ export function PerformancePanel() {
   const toast = useToast();
   const evolve = useValue(p.evolve), freeze = useValue(p.freeze), reverse = useValue(p.reverse);
   const scatter = useValue(p.scatter), octave = useValue(p.octave), stutter = useValue(p.stutter);
+  const scatterAmt = useValue(p.scatterAmt), octaveAmt = useValue(p.octaveAmt), stutterAmt = useValue(p.stutterAmt);
+  const toggleWithAmount = (on: Param<boolean>, amount: Param<number>) => { if (!on.value) amount.value = 0.5; on.value = !on.value; };
   const [flash, setFlash] = useState<string | null>(null);
   const db = useRef<HTMLSpanElement>(null);
   const momentary = (k: string, ms: number) => { setFlash(k); window.setTimeout(() => setFlash(null), ms); };
@@ -156,9 +171,9 @@ export function PerformancePanel() {
       <div className="macros">
         {Btn("freeze", "Freeze", freeze, () => (p.freeze.value = !freeze))}
         {Btn("reverse", "Reverse", reverse, () => (p.reverse.value = !reverse))}
-        {Btn("scatter", "Scatter", scatter, () => (p.scatter.value = !scatter))}
-        {Btn("octave", "Octave", octave, () => (p.octave.value = !octave))}
-        {Btn("stutter", "Stutter", stutter, () => (p.stutter.value = !stutter))}
+        <MacroKnob kind="scatter" label="Scatter" on={scatter} amount={scatterAmt} onToggle={() => toggleWithAmount(p.scatter, p.scatterAmt)} onAmount={(v) => (p.scatterAmt.value = v)} />
+        <MacroKnob kind="octave" label="Octave" on={octave} amount={octaveAmt} onToggle={() => toggleWithAmount(p.octave, p.octaveAmt)} onAmount={(v) => (p.octaveAmt.value = v)} />
+        <MacroKnob kind="stutter" label="Stutter" on={stutter} amount={stutterAmt} onToggle={() => toggleWithAmount(p.stutter, p.stutterAmt)} onAmount={(v) => (p.stutterAmt.value = v)} />
         {Btn("evolve", "Evolve", evolve, () => (p.evolve.value = !evolve))}
         {Btn("resample", "Resample", flash === "resample", () => { momentary("resample", 700); toast("Resample: last 8 bars captured as a new source (prototype)"); })}
         {Btn("reroll", "Re-roll", flash === "reroll", () => { momentary("reroll", 500); instrument.setSeed((Math.random() * 9000 + 1000) | 0); })}

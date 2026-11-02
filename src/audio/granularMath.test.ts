@@ -6,14 +6,14 @@ const base = { position: 0.3, size: 0.5, density: 0.5, spray: 0.3, pitch: 0, oct
 
 describe("mappings", () => {
   it("cover their documented ranges", () => {
-    expect(grainSeconds(0)).toBeCloseTo(0.02);
-    expect(grainSeconds(1)).toBeCloseTo(0.4);
-    expect(grainsPerSecond(0)).toBeCloseTo(2);
-    expect(grainsPerSecond(1)).toBeCloseTo(80);
+    expect(grainSeconds(0)).toBeCloseTo(0.01);
+    expect(grainSeconds(1)).toBeCloseTo(4);
+    expect(grainsPerSecond(0)).toBeCloseTo(1);
+    expect(grainsPerSecond(1)).toBeCloseTo(200);
     expect(semitones(0.5)).toBe(0);
     expect(semitones(1)).toBe(12);
     expect(cutoffHz(1)).toBe(20000);
-    expect(cutoffHz(0)).toBeCloseTo(300);
+    expect(cutoffHz(0)).toBeCloseTo(25);
   });
   it("wraps negative positions", () => {
     expect(wrap(-0.25, 1)).toBeCloseTo(0.75);

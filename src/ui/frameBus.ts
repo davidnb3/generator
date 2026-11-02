@@ -4,11 +4,20 @@ type Frame = (now: number, dt: number) => void;
 const subs: { cb: Frame; prio: number }[] = [];
 let raf = 0, last = 0;
 
+let reported = 0;
+
+/** One failing subscriber must not stop the animation loop (and with it every other view), so errors are caught per callback. */
 function loop(now: number) {
   const dt = Math.min(50, now - last || 16.7);
   last = now;
-  for (const s of subs) s.cb(now, dt);
-  raf = subs.length ? requestAnimationFrame(loop) : 0;
+  try {
+    for (const s of [...subs]) {
+      try { s.cb(now, dt); }
+      catch (e) { if (reported++ < 5) console.error("Frame callback failed:", e); }
+    }
+  } finally {
+    raf = subs.length ? requestAnimationFrame(loop) : 0;
+  }
 }
 
 /** One shared animation loop. Lower priority runs first, so the instrument ticks before views draw. */

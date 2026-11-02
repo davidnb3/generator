@@ -7,13 +7,13 @@ import { Knob } from "./Knob";
 import { Orb } from "./Orb";
 import { GesturePanel, PerformancePanel, SourcePanel, VoicesPanel } from "./Panels";
 import { TopBar } from "./TopBar";
-import { MidiProvider, StageScale, ToastProvider, useMidi, useStageFit } from "./context";
+import { MidiProvider, StageScale, ToastProvider, ToastView, useMidi, useStageFit } from "./context";
 
 const { instrument } = engine;
 const p = instrument.params;
 
 const RING = [
-  { id: "position", side: -1, row: 0 }, { id: "size", side: -1, row: 1 }, { id: "density", side: -1, row: 2 }, { id: "spray", side: -1, row: 3, grad: "A" },
+  { id: "position", side: -1, row: 0 }, { id: "size", side: -1, row: 1 }, { id: "density", side: -1, row: 2 }, { id: "spray", side: -1, row: 3 },
   { id: "pitch", side: 1, row: 0 }, { id: "filter", side: 1, row: 1, grad: "A" }, { id: "space", side: 1, row: 2, grad: "A" }, { id: "drive", side: 1, row: 3, grad: "A" },
 ] as const;
 const DY = [-175, -70, 70, 175];
@@ -97,6 +97,7 @@ export function App() {
                 <PerformancePanel />
                 <Shortcuts />
                 <RecorderWarmup />
+                <ToastView />
               </div>
             </LearnClass>
           </MidiProvider>

@@ -19,23 +19,36 @@ export function useStageFit() {
   return fit;
 }
 
-const ToastCtx = createContext<(msg: string) => void>(() => {});
+export type ToastKind = "info" | "error";
+interface ToastState { msg: string; kind: ToastKind; show: boolean }
+
+const ToastCtx = createContext<(msg: string, kind?: ToastKind) => void>(() => {});
+const ToastStateCtx = createContext<ToastState>({ msg: "", kind: "info", show: false });
 export const useToast = () => useContext(ToastCtx);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [msg, setMsg] = useState("");
-  const [show, setShow] = useState(false);
+  const [state, setState] = useState<ToastState>({ msg: "", kind: "info", show: false });
   const timer = useRef<number>(0);
-  const toast = useCallback((m: string) => {
-    setMsg(m); setShow(true);
+  const toast = useCallback((msg: string, kind: ToastKind = "info") => {
+    setState({ msg, kind, show: true });
     clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setShow(false), 2600);
+    timer.current = window.setTimeout(() => setState((s) => ({ ...s, show: false })), kind === "error" ? 7000 : 3500);
   }, []);
   return (
     <ToastCtx.Provider value={toast}>
-      {children}
-      <div id="toast" role="status" className={show ? "show" : ""}>{msg}</div>
+      <ToastStateCtx.Provider value={state}>{children}</ToastStateCtx.Provider>
     </ToastCtx.Provider>
+  );
+}
+
+/** Rendered inside the scaled stage, so it grows with the screen like everything else. Errors are red and stay longer. */
+export function ToastView() {
+  const { msg, kind, show } = useContext(ToastStateCtx);
+  return (
+    <div id="toast" role={kind === "error" ? "alert" : "status"} className={`${show ? "show" : ""}${kind === "error" ? " error" : ""}`}>
+      {kind === "error" && <i aria-hidden="true">!</i>}
+      <span>{msg}</span>
+    </div>
   );
 }
 

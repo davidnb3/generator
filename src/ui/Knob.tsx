@@ -8,7 +8,7 @@ import { useFrame } from "./frameBus";
 
 const GA = 135, SW = 270;
 const pol = (cx: number, cy: number, r: number, a: number): [number, number] => [cx + r * Math.cos((a * Math.PI) / 180), cy + r * Math.sin((a * Math.PI) / 180)];
-function arc(cx: number, cy: number, r: number, a0: number, a1: number) {
+export function arc(cx: number, cy: number, r: number, a0: number, a1: number) {
   if (Math.abs(a1 - a0) < 0.05) a1 = a0 + 0.05;
   const [x0, y0] = pol(cx, cy, r, a0), [x1, y1] = pol(cx, cy, r, a1);
   return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${r} ${r} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} ${a1 > a0 ? 1 : 0} ${x1.toFixed(2)} ${y1.toFixed(2)}`;

@@ -2,11 +2,11 @@ import { clamp } from "./modulation";
 import type { Rng } from "./rng";
 
 /** Knob (0..1) to musical units. */
-export const grainSeconds = (size: number) => 0.02 * Math.pow(20, clamp(size)); // 20 ms .. 400 ms
-export const grainsPerSecond = (density: number) => 2 * Math.pow(40, clamp(density)); // 2 .. 80 per second
+export const grainSeconds = (size: number) => 0.01 * Math.pow(400, clamp(size)); // 10 ms .. 4 s
+export const grainsPerSecond = (density: number) => Math.pow(200, clamp(density)); // 1 .. 200 per second
 export const semitones = (pitch: number) => (clamp(pitch) - 0.5) * 24; // +-12 st, 0.5 is unison
 export const rateOf = (st: number) => Math.pow(2, st / 12);
-export const cutoffHz = (filter: number) => Math.min(20000, 300 * Math.pow(70, clamp(filter))); // 300 Hz .. 20 kHz
+export const cutoffHz = (filter: number) => Math.min(20000, 25 * Math.pow(800, clamp(filter))); // 25 Hz .. 20 kHz
 
 export const wrap = (x: number, m: number) => ((x % m) + m) % m;
 
@@ -50,6 +50,5 @@ export function hann(points = 32): Float32Array {
   return Float32Array.from({ length: points }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (points - 1)));
 }
 
-/** Stutter repeats one spot at a steady pulse: a sixteenth note at the given tempo, fixed grain size, no spray. */
-export const STUTTER = { size: 0.35, density: 0.3 };
+/** The length of the stutter loop: a sixteenth note at the given tempo. */
 export const stutterInterval = (bpm: number) => 60 / bpm / 4;

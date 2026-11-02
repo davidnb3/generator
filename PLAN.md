@@ -5,7 +5,7 @@ Upload a sound, shape it with granular, spectral and physics-driven sources, add
 modulation and randomness, fire risers and drops, and bounce everything to WAV for
 a DAW. Inspired by Native Instruments' Kinetic Metal.
 
-Status: Phases 0 and 1 done; the sound path is complete (rooms, drive, spectral, wet, gesture hits, scatter, octave, stutter) and exports to WAV. The React UI, orb keyboard control, MIDI learn, a real `GranularCloud` and the slow player make sound from the loaded sample. Next: Phase 3 physics scene, then evolver macros, layers and stems, data feeds.
+Status: Phases 0 and 1 done and the sound path is complete. Stage A of the soundscape work is in: layer levels, a true Dry/Wet against the original sample, a room Dry/Wet, tap-and-drag performance knobs, a whole-sound Stutter, a first drone voice, and real meters. Next: stage B (a spectral-stretch drone, bigger rooms with shimmer and freeze), stage C (tuned resonators, slow drifting movement), then Phase 3 physics scene, evolver macros, stems, data feeds.
 
 ## Stack
 

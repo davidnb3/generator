@@ -134,8 +134,14 @@ Pill container (`--r-sm`, 3 px padding) with equal buttons, one selected. Select
 ### Macro button
 62 px circular key with a 22 px line icon (1.6 px stroke) and a mono caption below. Active: amber icon and border, inner and outer amber glow, and an expanding ping ring every 2.2 s. Momentary actions (Re-roll, Resample) flash active for 0.5 to 0.7 s and show a toast. Toggles (Freeze, Reverse, Scatter, Octave, Stutter, Evolve) use `aria-pressed`.
 
+### Voices panel
+Top to bottom: four layer knobs in a 2 by 2 grid (Cloud, Slow, Drone, Spectral; 84 px), the DRY WET slider directly under them, the Layers list, and the Room section. Each big knob is that layer's level. The slider is labelled only "Dry" and "Wet"; what it mixes is told by where it sits: under the knobs it crossfades your original sample against everything generated, and inside the Room section the same slider crossfades the layers against the room. The Layers list repeats each layer with a live meter (measured from the audio, not decoration) and a mute button.
+
+### Macro knob
+A macro button that carries an amount. Tap turns it on at 50%; drag up or down on it to change the amount (about 160 stage px for the full range); tap again to turn it off. When on, an amber arc around the icon shows the level and the percentage appears under the label. Keyboard: Enter or Space toggles, Up and Down arrows change the amount when it is on. Screen readers hear "Stutter, 50 percent". Use it for performance effects that need a depth; keep plain `MacroButton` for pure on/off toggles.
+
 ### Room picker
-A compact stepper in the Voices panel: previous and next icon buttons around a name block (mono "Room" caption, the room name, and for "Your sample" the sample's name). It chooses what the Space knob sounds like. Cycles through six built-in rooms and "Your sample", wrapping at both ends. The name block is `aria-live="polite"` so a screen reader announces the change; the buttons have labels ("Previous room", "Next room"). Use this pattern for any choose-one-of-many setting with more options than a segmented control can hold.
+A compact stepper in the Voices panel: previous and next icon buttons around a name block (mono "Room" caption, the room name, and for "Your sample" the sample's name), with the room's own DRY WET slider beneath it. It chooses what the room sounds like; the slider (the same control as the Space knob) sets how much of it you hear. Cycles through six built-in rooms and "Your sample", wrapping at both ends. The name block is `aria-live="polite"` so a screen reader announces the change; the buttons have labels ("Previous room", "Next room"). Use this pattern for any choose-one-of-many setting with more options than a segmented control can hold.
 
 ### Primary button, Fire, Export
 Pill, `--grad-brand`, dark text (`--on-accent`). One per view region: Export WAV in the top bar, Fire in the Gesture panel. Fire shows progress as a white 45% fill growing from the left across the gesture duration. Hover brightens by 8% and lifts 1 px; press scales to 0.97.
@@ -156,7 +162,14 @@ Dashed `--line-strong` border, `--r-md`. Shows file name, metadata, a mini wavef
 Four curves over a bar grid (density, size, filter, space), each in its own color, with a playhead during a gesture. Randomness adds seeded jitter; Curve changes the exponent. The same seed must reproduce the same curves, because that is what offline export replays.
 
 ### Toast
-Centered bottom pill, slides up 20 px and fades in over 0.4 s, auto-hides after 2.6 s. `role="status"`. Copy follows section 5.
+Centered near the bottom of the stage (inside it, so it scales with the screen), 17 px text, `--r-lg` corners, slides up 20 px and fades in over 0.4 s. Two kinds:
+
+| Kind | Look | Role | Stays |
+|---|---|---|---|
+| Info | Dark pill with a hairline border | `status` | 3.5 s |
+| Error | Rose-tinted fill, rose border, light-rose text, a filled "!" badge | `alert` | 7 s |
+
+Use the error kind for anything that failed or needs the user to act (a file that can't be loaded, a recording that couldn't start). Copy follows section 5.
 
 ## 4. Accessibility
 
