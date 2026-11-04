@@ -34,8 +34,12 @@ physics-driven), with risers/drops, modulation, and WAV export. Built on Audiore
     grains, Octave is the share of grains an octave up, Stutter loops the last sixteenth note (at `BPM`) of the whole
     sound and the amount is the loop against the live sound. Freeze stops the head the grains read from (cloud and drone);
     the slow loop keeps moving, because freezing a sample at one instant has no sound.
-  - The cloud reads at playhead + Position. The playhead is the head on the orb ring; Freeze holds it, Reverse runs it
-    backwards and plays grains from a reversed buffer. Audio starts on the first click (AudioContext autoplay policy).
+  - The head the grains and the drone read from (the marker on the orb ring) normally IS the position of the original-sample
+    loop, read off the audio clock (`live.transport`), so the soundscape smears around the exact moment you hear in the
+    original; Position is an offset from it (default 0 = the same moment). Grains are read `GRAIN_LEAD` (0.1 s, measured)
+    ahead of the head because they are planned that long before they sound. Freeze holds the head while the original carries
+    on, Reverse runs it backwards and plays grains from a reversed buffer; when either ends the head snaps back to the
+    original. Audio starts on the first click (AudioContext autoplay policy).
   - `src/midi/` — Web MIDI input with learn (`MidiManager`) and pure decoding (`bindings.ts`, tested).
   - `src/ui/` — React components (Knob, Orb, Canvases, Panels, TopBar, App). UI reads params with `useValue`
     and writes `param.value` or calls `Instrument` methods; it never schedules audio.

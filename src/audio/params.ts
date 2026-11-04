@@ -1,6 +1,6 @@
 /** Parameters the orb can modulate. ax/ay are the depth of the orb's X (Texture) and Y (Energy) axes. */
 export const MODULATED = [
-  { id: "position", label: "Position", default: 0.35, ax: 0, ay: 0 },
+  { id: "position", label: "Position", default: 0, ax: 0, ay: 0 },
   { id: "size", label: "Size", default: 0.37, ax: 0.35, ay: 0 },
   { id: "density", label: "Density", default: 0.51, ax: 0, ay: 0.35 },
   { id: "spray", label: "Spray", default: 0.3, ax: 0.2, ay: 0.2 },

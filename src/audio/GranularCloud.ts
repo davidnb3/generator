@@ -43,7 +43,7 @@ export class GranularCloud extends AudioProcessor<CloudParams> {
     const out = new GainNode(ctx, { gain: 0.8 });
     super(ctx, ({ param }) => ({
       params: {
-        position: param<number>({ default: 0.35, min: 0, max: 1 }),
+        position: param<number>({ default: 0, min: 0, max: 1 }),
         size: param<number>({ default: 0.37, min: 0, max: 1 }),
         density: param<number>({ default: 0.51, min: 0, max: 1 }),
         spray: param<number>({ default: 0.3, min: 0, max: 1 }),

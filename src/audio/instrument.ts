@@ -36,6 +36,9 @@ type InstrumentParams = Record<NumericId, Param<number>> & {
   recordingSince: Param<number | null>;
 };
 
+/** Seconds between a grain being planned and sounding, on average (measured). */
+const GRAIN_LEAD = 0.1;
+
 /** Seconds control changes are scheduled ahead of the audio clock. */
 const CONTROL_LEAD = 0.02;
 
@@ -73,7 +76,8 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
 
   /** Per-frame values read by the canvases. Not reactive, because they change every frame. */
   readonly live = {
-    head: 0,
+    head: 0, // where the grains read from (the ring marker). Normally the same as `transport`.
+    transport: 0, // 0..1 position of the original-sample loop, read off the audio clock
     rise: 0,
     drop: 0,
     impacts: 0, // increments on every gesture hit; views react by comparing with their last seen value
@@ -282,7 +286,16 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
 
   tick(now: number, dt: number) {
     const p = this.params, live = this.live;
-    if (!p.freeze.value) live.head = (live.head + (dt / 1000 / p.sample.value.duration) * (p.reverse.value ? -1 : 1) + 1) % 1;
+    // The head the grains read from is normally the position of the original-sample loop itself (read off the audio clock),
+    // so the soundscape smears around the exact moment you hear in the original. Freeze holds the head and Reverse runs it
+    // backwards while the original carries on; when either ends, the head snaps back to the original.
+    const dur = p.sample.value.duration;
+    live.transport = this.context.state === "running"
+      ? (Math.max(0, this.context.currentTime - this.originalStart) % dur) / dur
+      : (live.transport + dt / 1000 / dur) % 1; // audio isn't running yet: keep the ring moving
+    if (p.freeze.value) { /* hold */ }
+    else if (p.reverse.value) live.head = (live.head - dt / 1000 / dur + 1) % 1;
+    else live.head = live.transport;
 
     let rise = 0, drop = 0;
     const g = this.running;
@@ -344,13 +357,16 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     c.density.value = this.effective("density");
     c.spray.value = this.effective("spray");
     c.pitch.value = st;
-    c.playhead.value = this.live.head;
+    // Grains are scheduled about 100 ms before they sound (measured), so read a little ahead of the head when it follows the
+    // original; otherwise the soundscape would trail the original by that much.
+    const ahead = !p.freeze.value && !p.reverse.value ? GRAIN_LEAD / p.sample.value.duration : 0;
+    c.playhead.value = (this.live.head + ahead) % 1;
     c.reverse.value = p.reverse.value;
     c.octave.value = p.octave.value ? p.octaveAmt.value : 0;
     // The drone (first version): the same grain engine with very long, heavily overlapping grains, an octave down, so
     // the grains melt into one sustained sound. It follows Position, Freeze and Reverse with the grain cloud.
     d.position.value = c.position.value;
-    d.playhead.value = this.live.head;
+    d.playhead.value = c.playhead.value;
     d.reverse.value = p.reverse.value;
     d.size.value = 0.93;
     d.density.value = 0.2;
