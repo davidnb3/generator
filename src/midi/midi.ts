@@ -2,8 +2,11 @@ import type { Instrument } from "../audio/instrument";
 import type { NumericId } from "../audio/params";
 import { PUSH_DEFAULT, decodeMessage, isEncoderPort, parseControlChange, upsertBinding, type Binding } from "./bindings";
 
-const STORE = "generator.midi.bindings";
-const ENABLED = "generator.midi.enabled";
+const STORE = "grainwash.midi.bindings";
+const ENABLED = "grainwash.midi.enabled";
+// the app was called Generator before; keep reading its saved settings so nothing is lost
+const OLD_STORE = "generator.midi.bindings";
+const OLD_ENABLED = "generator.midi.enabled";
 
 export type MidiStatus = "off" | "unsupported" | "denied" | "ready";
 export interface MidiState { status: MidiStatus; inputs: string[]; learning: NumericId | null; bindings: Binding[]; lastCc: string }
@@ -16,7 +19,7 @@ export class MidiManager {
   private learnQueue: NumericId[] = [];
 
   constructor(private readonly instrument: Instrument) {
-    try { if (localStorage.getItem(ENABLED) === "1") void this.enable(); } catch { /* storage unavailable */ }
+    try { if (localStorage.getItem(ENABLED) === "1" || localStorage.getItem(OLD_ENABLED) === "1") void this.enable(); } catch { /* storage unavailable */ }
   }
 
   get snapshot() { return this.state; }
@@ -40,7 +43,7 @@ export class MidiManager {
   disable() {
     if (this.access) { this.access.inputs.forEach((i) => (i.onmidimessage = null)); this.access.onstatechange = null; }
     this.access = null;
-    try { localStorage.removeItem(ENABLED); } catch { /* ignore */ }
+    try { localStorage.removeItem(ENABLED); localStorage.removeItem(OLD_ENABLED); } catch { /* ignore */ }
     this.set({ status: "off", inputs: [], learning: null });
   }
 
@@ -87,5 +90,5 @@ export class MidiManager {
 }
 
 function load(): Binding[] {
-  try { return JSON.parse(localStorage.getItem(STORE) ?? "[]") as Binding[]; } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(STORE) ?? localStorage.getItem(OLD_STORE) ?? "[]") as Binding[]; } catch { return []; }
 }

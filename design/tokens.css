@@ -1,4 +1,4 @@
-/* Generator design tokens. Source of truth: design/DESIGN-SYSTEM.md.
+/* Grainwash design tokens. Source of truth: design/DESIGN-SYSTEM.md.
    Components read semantic tokens (layer 2), never the raw palette (layer 1). */
 
 :root {

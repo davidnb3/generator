@@ -82,7 +82,6 @@ export function App() {
               <defs>
                 <linearGradient id="gradV" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stopColor="var(--violet-500)" /><stop offset="1" stopColor="var(--violet-200)" /></linearGradient>
                 <linearGradient id="gradA" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stopColor="var(--amber-500)" /><stop offset="1" stopColor="var(--amber-200)" /></linearGradient>
-                <linearGradient id="gradVA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="var(--violet-400)" /><stop offset="1" stopColor="var(--amber-400)" /></linearGradient>
                 <radialGradient id="bodyGrad" cx="40%" cy="30%" r="80%"><stop offset="0" stopColor="#3d3a4c" /><stop offset="1" stopColor="var(--ink-800)" /></radialGradient>
               </defs>
             </svg>

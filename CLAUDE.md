@@ -1,4 +1,4 @@
-# Generator
+# Grainwash
 
 Browser instrument for evolving soundscapes from uploaded samples (granular, spectral,
 physics-driven), with risers/drops, modulation, and WAV export. Built on Audiorective
@@ -7,6 +7,9 @@ physics-driven), with risers/drops, modulation, and WAV export. Built on Audiore
 ## Layout
 
 - `PLAN.md` — feature plan and phases.
+- Name and logo: the app is Grainwash (formerly Generator). The mark lives in `design/logo/grainwash-mark.svg` (source of truth),
+  `public/favicon.svg` and `src/ui/Logo.tsx`; rules are in `design/DESIGN-SYSTEM.md` section 9. Saved MIDI settings still fall back
+  to the old `generator.midi.*` keys.
 - `src/` — the React app (Vite + TypeScript). `npm run dev`, `npm run typecheck`, `npm test`, `npm run build`.
   - `src/audio/` — audio layer: `Instrument` (an `AudioProcessor` holding all params, orb, gestures, sample, and the
     signal chain), `GranularCloud` (grain scheduler; `scheduleUntil` is the only place grains are made, so live and
@@ -91,6 +94,10 @@ knobs arced around it, side panels, gesture (riser/drop) panel and performance b
 - The render's pre-roll must be a whole number of 128-frame render quanta: the engine starts sources on quantum boundaries
   and the recorder starts on one, so a fractional pre-roll shifted some sources (the drone) by 2 quanta (5.8 ms) in the
   first take after a page load. It must also cover the longest grain (the drone's, 2.6 s).
+- Known limitation: the Spectral layer's frequency shifter (`@audiorective/effects`) has free-running oscillators, so an offline
+  render can't reproduce their phase. Loudness over time matches, but with Spectral on the render's waveform detail can differ
+  (replay correlation anywhere from about 0.1 to 0.95); with Spectral muted every take replays at 1.0. The live REC capture is
+  always exact. Fixing it means anchoring the oscillator phase like `playerClock.ts` does for the slow loop.
 - Room changes and Reverse toggles mid-take are heard live but the render keeps the starting room and slow direction.
 
 ## Keyboard

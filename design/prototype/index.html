@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Generator — UI prototype</title>
+<title>Grainwash — UI prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
@@ -20,9 +20,6 @@
     <linearGradient id="gradA" x1="0" y1="1" x2="1" y2="0">
       <stop offset="0" stop-color="#e8782f"/><stop offset="1" stop-color="#ffd08a"/>
     </linearGradient>
-    <linearGradient id="gradVA" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#8f74ff"/><stop offset="1" stop-color="#f6a944"/>
-    </linearGradient>
     <radialGradient id="bodyGrad" cx="40%" cy="30%" r="80%">
       <stop offset="0" stop-color="#3d3a4c"/><stop offset="1" stop-color="#14121b"/>
     </radialGradient>
@@ -34,11 +31,12 @@
 
   <header id="top" class="enter" style="--d:0">
     <div class="brand">
-      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
-        <circle cx="15" cy="15" r="11" fill="none" stroke="url(#gradVA)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="58 12" transform="rotate(-70 15 15)"/>
-        <circle cx="15" cy="15" r="3" fill="#ffd08a"/>
+      <svg height="26" width="39" viewBox="24 28 108 72" aria-hidden="true">
+        <path d="M96 34A30 30 0 0 1 96 94" fill="none" stroke="var(--amber-400)" stroke-width="4" stroke-linecap="round"/>
+        <g fill="var(--violet-200)"><circle cx="86" cy="92" r="3"/><circle cx="72" cy="83" r="3"/><circle cx="66" cy="66" r="2.6"/><circle cx="70" cy="48" r="2.6"/><circle cx="82" cy="37" r="2.2"/><circle cx="54" cy="58" r="2"/><circle cx="46" cy="72" r="1.7"/><circle cx="38" cy="52" r="1.5"/><circle cx="30" cy="66" r="1.2"/></g>
+        <circle cx="109" cy="58" r="4" fill="var(--cream)"/>
       </svg>
-      <span>GENERATOR</span>
+      <span>GRAINWASH</span>
     </div>
     <div class="preset">
       <button class="icon-btn" aria-label="Previous preset">‹</button>

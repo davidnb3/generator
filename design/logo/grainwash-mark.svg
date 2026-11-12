@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="24 28 108 72" width="324" height="216" role="img" aria-label="Grainwash">
+  <title>Grainwash</title>
+  <path d="M96 34A30 30 0 0 1 96 94" fill="none" stroke="#f6a944" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#c3b2ff">
+    <circle cx="86" cy="92" r="3"/><circle cx="72" cy="83" r="3"/><circle cx="66" cy="66" r="2.6"/>
+    <circle cx="70" cy="48" r="2.6"/><circle cx="82" cy="37" r="2.2"/><circle cx="54" cy="58" r="2"/>
+    <circle cx="46" cy="72" r="1.7"/><circle cx="38" cy="52" r="1.5"/><circle cx="30" cy="66" r="1.2"/>
+  </g>
+  <circle cx="109" cy="58" r="4" fill="#ffe8c4"/>
+</svg>

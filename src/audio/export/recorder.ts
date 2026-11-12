@@ -1,6 +1,6 @@
 /** Records the exact PCM that passes a point in the graph, using an AudioWorklet (no compression, no resampling). */
 
-const NAME = "generator-pcm-recorder";
+const NAME = "grainwash-pcm-recorder";
 const SOURCE = `
 class Rec extends AudioWorkletProcessor {
   constructor() {

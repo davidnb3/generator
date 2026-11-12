@@ -1,4 +1,4 @@
-# Generator design system
+# Grainwash design system
 
 Version 0.1. Extracted from `design/prototype/`. Tokens live in [tokens.css](tokens.css) and are the source of truth; this document explains how to use them. Keep both in sync.
 
@@ -29,7 +29,7 @@ Version 0.1. Extracted from `design/prototype/`. Tokens live in [tokens.css](tok
 | `--danger` | `#ff6f91` | REC, mute, loudest meter segments |
 | `--on-accent` | `#1a1020` | Text on gradient buttons |
 
-Gradients: `--grad-cool`, `--grad-warm` (value fills, bars), `--grad-brand` (primary buttons, logo ring). Palette ramps (`--violet-500`, `--amber-500`, etc.) are layer 1: use them only inside token definitions or canvas code that can't read CSS variables.
+Gradients: `--grad-cool`, `--grad-warm` (value fills, bars), `--grad-brand` (primary buttons). Palette ramps (`--violet-500`, `--amber-500`, etc.) are layer 1: use them only inside token definitions or canvas code that can't read CSS variables.
 
 Contrast: `--text` on panel is about 14:1, `--text-2` about 6.5:1, `--muted` about 3:1. `--muted` is for non-essential metadata only; never use it for anything the user must read.
 
@@ -225,3 +225,23 @@ Score: structure 8/10, token coverage 6/10, accessibility 6/10.
 2. Add a living component page (all states side by side) so regressions are visible.
 3. Add orb keyboard control and a reduced-motion grain budget.
 4. Version this system: breaking token renames get a changelog entry and a migration note here.
+
+## 9. Logo
+
+The Grainwash mark is a smooth amber half circle with an eye, and a stream of violet grains dissolving off its back: the sound is washed out of its grains, or the other way round. It plays on the name (grain and brainwash) and on the half-dotted, half-smooth idea the whole app uses.
+
+| Part | Token | Notes |
+|---|---|---|
+| Head (half circle) | `--amber-400` | 4 units thick, round caps |
+| Grains (nine dots, shrinking away from the head) | `--violet-200` | Radii 3 down to 1.2 |
+| Eye | `--cream` | Radius 4, sits inside the arc, upper right |
+
+Files: `design/logo/grainwash-mark.svg` (source of truth, standalone hex colours), `public/favicon.svg` (the mark on a dark rounded tile, with heavier strokes and bigger grains so it holds up at 16 px), and the `Logo` component in `src/ui/Logo.tsx` (reads the tokens, so it follows the palette).
+
+Rules:
+- Wordmark: GRAINWASH, Sora 500, uppercase, tracking `--track-brand`, placed to the right of the mark with a 12 px gap. Mark height is about 1.9 times the wordmark cap height (26 px beside 14 px text).
+- Clear space: at least the eye's diameter (8 units) around the mark.
+- Minimum size: 24 px tall for the full mark. Below that, use the favicon version.
+- Always on a dark surface. Do not recolour, rotate, mirror, outline, or add a glow. Do not drop grains to simplify it; use the favicon version instead.
+- Keep `design/logo/grainwash-mark.svg`, `public/favicon.svg` and `src/ui/Logo.tsx` in step if the mark ever changes.
+

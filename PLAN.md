@@ -1,4 +1,4 @@
-# Generator: plan
+# Grainwash: plan
 
 A browser instrument for evolving soundscapes built from the user's own samples.
 Upload a sound, shape it with granular, spectral and physics-driven sources, add

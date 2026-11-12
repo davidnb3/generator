@@ -7,6 +7,7 @@ import { downloadBytes, encodeWav } from "../audio/export/wav";
 import { renderTake } from "../audio/export/render";
 import { useMidi, useToast } from "./context";
 import { useFrame } from "./frameBus";
+import { Logo } from "./Logo";
 
 const { instrument } = engine;
 
@@ -46,7 +47,7 @@ export function TopBar() {
     try {
       if (!instrument.recording) { await instrument.startRecording(); return; }
       const take = await instrument.stopRecording();
-      const name = `generator-take-${take.id}.wav`;
+      const name = `grainwash-take-${take.id}.wav`;
       downloadBytes(name, encodeWav(take.pcm, take.sampleRate));
       toast(`Saved ${name} · ${take.duration.toFixed(1)} s, 24-bit stereo. Export WAV re-renders this take offline.`);
     } catch (e) {
@@ -61,7 +62,7 @@ export function TopBar() {
     toast("Rendering…");
     try {
       const r = await renderTake(take);
-      const name = `generator-take-${take.id}-render.wav`;
+      const name = `grainwash-take-${take.id}-render.wav`;
       downloadBytes(name, encodeWav(r.channels, r.sampleRate));
       toast(`Saved ${name} · offline render, 24-bit stereo`);
     } catch {
@@ -81,11 +82,8 @@ export function TopBar() {
   return (
     <header id="top" className="enter" style={{ ["--d" as string]: 0 }}>
       <div className="brand">
-        <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
-          <circle cx="15" cy="15" r="11" fill="none" stroke="url(#gradVA)" strokeWidth="2.4" strokeLinecap="round" strokeDasharray="58 12" transform="rotate(-70 15 15)" />
-          <circle cx="15" cy="15" r="3" fill="#ffd08a" />
-        </svg>
-        <span>GENERATOR</span>
+        <Logo decorative />
+        <span>GRAINWASH</span>
       </div>
       <div className="preset">
         <button className="icon-btn" aria-label="Previous preset">‹</button>
