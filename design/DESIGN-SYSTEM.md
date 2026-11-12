@@ -117,7 +117,7 @@ A 480 px circular XY surface (canvas, 560 px including glow) that moves a puck. 
 | Drop | Shockwave ring, radial flash, waveform bars flare |
 | Frozen | Head stops, grain rate drops to 25% |
 
-Grains are the sound made visible: a grain's exit point on the ring maps to a position in the sample, and the bar there flares. Colors: cream, violet and amber at about 45 / 35 / 20%.
+Grains are the sound made visible, and they are real: every grain the audio engine plays (both clouds) becomes one particle, drawn when it sounds (`Instrument.takeDueGrains`, mapping in `src/ui/grainVisual.ts`). It travels from the puck to the ring at the grain's real read position in the sample, and the bars there flare. A faint arc on the ring shows the stretch of sample the grain really plays (long grains and the drone make wide arcs, capped at 30% of the ring). Colour is pitch (amber = an octave up, violet = down, cream = plain, pale and large = drone), size is grain length, fade is loudness, and the sideways bow is pan. A particle lives at least 0.35 s so short grains stay visible; at most 500 are drawn. When the orb rests (no sound, or audio not running) no grains are drawn.
 
 Keyboard: the orb is focusable (`role="application"`, `aria-roledescription="2D modulation pad"`). Arrows move the puck 2% of the pad, Shift moves 10%, Alt moves 0.5%, Home recentres. A visually hidden readout ("Texture 62 percent, energy 58 percent") is linked with `aria-describedby` and updates about four times a second. Global keys: F fire, E evolve, Z freeze, R reverse, 1/2/3 gesture type, Esc cancels MIDI learn.
 

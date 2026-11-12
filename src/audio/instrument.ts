@@ -57,6 +57,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
   private pending: { take: Take; control: ControlEvent[]; clock: PlayerClock } | null = null; // control times are absolute until the take stops
   private recentGrains: GrainEvent[] = [];
   private recentHits: HitEvent[] = [];
+  private grainFeed: GrainEvent[] = []; // real grains waiting for the orb to draw them
   private takeCount = 0;
   /** Slow-player clock: its position follows the logged rate curves exactly, so a take can say where the loop was. */
   private clock: PlayerClock = initialClock(0);
@@ -125,6 +126,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     this.rng = createRng(this.params.seed.value);
 
     const onGrain = (e: GrainEvent) => {
+      if (this.grainFeed.length < 1500) this.grainFeed.push(e);
       this.recentGrains.push(e);
       this.pending?.take.grains.push(e);
       const cutoff = ctx.currentTime - 3;
@@ -285,6 +287,21 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     const result = await decodeSample(this.context, file);
     if (result.ok) this.params.sample.value = result.sample;
     return result;
+  }
+
+  /**
+   * The real grains the audio engine has started by `until` (context seconds), for the orb to draw. Each is returned once.
+   * Grains that were due more than a second ago (the page was busy) are dropped rather than drawn late.
+   */
+  takeDueGrains(until: number): GrainEvent[] {
+    if (this.grainFeed.length === 0) return [];
+    const due: GrainEvent[] = [], later: GrainEvent[] = [];
+    for (const e of this.grainFeed) {
+      if (e.when <= until) { if (e.when > until - 1) due.push(e); }
+      else later.push(e);
+    }
+    this.grainFeed = later;
+    return due;
   }
 
   /* ---- per-frame update ---- */

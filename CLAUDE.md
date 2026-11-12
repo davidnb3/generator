@@ -35,6 +35,10 @@ physics-driven), with risers/drops, modulation, and WAV export. Built on Audiore
   - Rooms (`rooms.ts`): six generated rooms (small, plate, hall, cathedral, cave, metal tank) plus "Your sample" (the
     first 4 s of the loaded sample, DC removed, soft edges, stereo). Chosen with the room picker in the Voices panel.
     A take keeps the room it started with.
+  - Orb grains are real: `Instrument` queues every `GrainEvent` from both clouds (`grainFeed`, capped at 1500) and the Orb
+    drains the ones that are due with `takeDueGrains(now)` once per frame. `src/ui/grainVisual.ts` (tested) maps an event to its
+    ring position (`readFraction`), the arc it covers (`grainHalfSpan`), colour (`grainTone`: pitch), size, loudness and life. Keep it that way: never spawn
+    decorative grains. When the orb rests the feed is drained and discarded.
   - Gesture hits: Riser plays a reversed swell, Drop plays the impact, Riser -> drop plays both. The hit is the loudest
     ~0.5 s of your sample, an octave down, plus a sub boom. Scheduled on the audio clock in `Instrument.fire`.
   - Performance knobs: Scatter, Octave and Stutter are tap-on/off buttons with an amount (starts at 50% every time it is

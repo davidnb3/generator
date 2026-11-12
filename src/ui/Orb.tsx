@@ -5,6 +5,7 @@ import { lerp } from "../audio/modulation";
 import { progress } from "./anim";
 import { useMidi } from "./context";
 import { useFrame } from "./frameBus";
+import { BARS, grainAlpha, grainHalfSpan, grainRadius, grainTone, readFraction, visualLife, type GrainTone } from "./grainVisual";
 import { useSoundActive } from "./useSoundActive";
 import { getTheme } from "./theme";
 import { useCanvas } from "./useCanvas";
@@ -13,7 +14,9 @@ const TAU = Math.PI * 2;
 const CX = 280, CY = 280, RI = 196, RW = 220, RR = 240;
 const easeOut = (t: number) => 1 - (1 - t) * (1 - t);
 
-interface Grain { x: number; y: number; vx: number; vy: number; s: number; col: string; curl: number }
+/** A real grain being drawn: it leaves the puck and travels to where it reads on the sample ring. */
+interface Particle { when: number; life: number; x0: number; y0: number; a: number; half: number; pan: number; tone: GrainTone; r: number; alpha: number }
+const MAX_PARTICLES = 500;
 
 /** Keyboard steps in orb units (the orb spans -1..1). */
 export const ORB_STEP = { normal: 0.02, coarse: 0.1, fine: 0.005 };
@@ -23,8 +26,8 @@ export function Orb() {
   const { manager, learnMode, state } = useMidi();
   const canvas = useCanvas(560, 560);
   const flash = useRef<HTMLDivElement>(null), readout = useRef<HTMLDivElement>(null);
-  const grains = useRef<Grain[]>([]), ripples = useRef<{ t0: number; big: boolean }[]>([]), shocks = useRef<{ t0: number }[]>([]);
-  const pulse = useRef(new Float32Array(240)), spawn = useRef(0), seenImpacts = useRef(0), lastAria = useRef(0);
+  const parts = useRef<Particle[]>([]), ripples = useRef<{ t0: number; big: boolean }[]>([]), shocks = useRef<{ t0: number }[]>([]);
+  const pulse = useRef(new Float32Array(BARS)), seenImpacts = useRef(0), lastAria = useRef(0);
   const peaks = useRef<number[]>([]);
   const sample = useValue(instrument.params.sample);
   useEffect(() => { peaks.current = sample.peaks; }, [sample]);
@@ -54,7 +57,7 @@ export function Orb() {
       seenImpacts.current = live.impacts;
       shocks.current.push({ t0: now });
       flash.current?.animate([{ opacity: 0.9 }, { opacity: 0 }], { duration: 900, easing: "cubic-bezier(.22,1,.36,1)" });
-      for (let i = 0; i < 18; i++) pulse.current[(Math.random() * 240) | 0] = 1;
+      for (let i = 0; i < 18; i++) pulse.current[(Math.random() * BARS) | 0] = 1;
     }
 
     c.clearRect(0, 0, 560, 560);
@@ -77,7 +80,7 @@ export function Orb() {
       c.beginPath(); c.moveTo(CX + Math.cos(a) * 203, CY + Math.sin(a) * 203); c.lineTo(CX + Math.cos(a) * r1, CY + Math.sin(a) * r1); c.stroke();
     }
 
-    const headA = live.head * TAU - Math.PI / 2, reverse = p.reverse.value, pk = peaks.current, N = 240;
+    const headA = live.head * TAU - Math.PI / 2, reverse = p.reverse.value, pk = peaks.current, N = BARS;
     c.lineCap = "round"; c.lineWidth = 2.2;
     for (let i = 0; i < N; i++) {
       const a = (i / N) * TAU - Math.PI / 2, peak = pk[Math.floor((i / N) * pk.length)] ?? 0;
@@ -122,37 +125,46 @@ export function Orb() {
       c.beginPath(); c.arc(px, py, easeOut(k) * (r.big ? 90 : 56), 0, TAU); c.stroke();
     });
 
-    const rate = on ? (0.9 + v.density * 4.2 + rise * 3.2) * (p.freeze.value ? 0.25 : 1) : 0;
-    if (!on) { grains.current = []; spawn.current = 0; }
-    spawn.current = Math.min(4, spawn.current + (dt / 16.7) * rate);
-    while (spawn.current >= 1 && grains.current.length < 900) {
-      spawn.current -= 1;
-      const a = Math.random() * TAU, sp = (50 + Math.random() * 170) * (0.7 + (1 - v.size) * 0.7) * (1 + rise * 0.9), h = Math.random();
-      grains.current.push({
-        x: px, y: py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, s: 0.9 + v.size * 2.3 * Math.random(),
-        col: h < 0.45 ? T.rgb.cream : h < 0.8 ? T.rgb.violet200 : T.rgb.amber400, curl: (Math.random() - 0.5) * 0.9 * (0.4 + v.spray),
-      });
-    }
-    const alive: Grain[] = [], sec = dt / 1000;
-    for (const g of grains.current) {
-      const cs = Math.cos(g.curl * sec), sn = Math.sin(g.curl * sec), nvx = g.vx * cs - g.vy * sn, nvy = g.vx * sn + g.vy * cs;
-      g.vx = nvx; g.vy = nvy;
-      const ox = g.x, oy = g.y; g.x += g.vx * sec; g.y += g.vy * sec;
-      const dx = g.x - CX, dy = g.y - CY, dist = Math.hypot(dx, dy);
-      if (dist >= RW - 18) {
-        let ang = Math.atan2(dy, dx) + Math.PI / 2; if (ang < 0) ang += TAU;
-        const idx = Math.floor((ang / TAU) * 240) % 240;
-        for (let d = -2; d <= 2; d++) { const k = (idx + d + 240) % 240; pulse.current[k] = Math.max(pulse.current[k], 1 - Math.abs(d) * 0.3); }
-        continue;
+    // Real grains: each one the audio engine starts is drawn leaving the puck for the spot it reads on the sample ring, and
+    // that spot flares. Colour is its pitch, size its length, fade its loudness, sideways bow its stereo pan.
+    const ctxNow = instrument.context.currentTime, sampleSeconds = p.sample.value.duration;
+    if (!on) {
+      instrument.takeDueGrains(Infinity); // nothing can be heard: drop whatever is queued
+      parts.current = [];
+    } else {
+      for (const e of instrument.takeDueGrains(ctxNow)) {
+        if (parts.current.length >= MAX_PARTICLES) break;
+        const frac = readFraction(e, sampleSeconds), half = grainHalfSpan(e, sampleSeconds), gain = Math.min(1, e.plan.gain * 3);
+        parts.current.push({ when: e.when, life: visualLife(e), x0: px, y0: py, a: frac * TAU - Math.PI / 2, half: half * TAU, pan: e.plan.pan, tone: grainTone(e), r: grainRadius(e), alpha: grainAlpha(e) });
+        const idx = Math.floor(frac * BARS) % BARS;
+        const reach = Math.max(2, Math.round(half * BARS)); // the flare covers what the grain really plays
+        for (let d = -reach; d <= reach; d++) { const k = (idx + d + BARS) % BARS; pulse.current[k] = Math.max(pulse.current[k], (1 - Math.abs(d) / (reach + 1) * 0.6) * (0.5 + 0.5 * gain)); }
       }
-      alive.push(g);
-      const fade = Math.min(1, Math.max(0, 1 - dist / RW)) * 0.8 + 0.2;
-      c.strokeStyle = `rgba(${g.col},${0.18 * fade + 0.1})`; c.lineWidth = 1;
-      c.beginPath(); c.moveTo(ox - g.vx * 0.16, oy - g.vy * 0.16); c.lineTo(g.x, g.y); c.stroke();
-      c.fillStyle = `rgba(${g.col},${0.55 + 0.4 * fade})`;
-      c.beginPath(); c.arc(g.x, g.y, g.s, 0, TAU); c.fill();
     }
-    grains.current = alive;
+    const toneRgb: Record<GrainTone, string> = { up: T.rgb.amber400, down: T.rgb.violet400, plain: T.rgb.cream, drone: T.rgb.violet200 };
+    const alive: Particle[] = [];
+    c.lineCap = "round";
+    for (const g of parts.current) {
+      const u = (ctxNow - g.when) / g.life;
+      if (u >= 1) continue;
+      alive.push(g);
+      if (u < 0) continue;
+      const tx = CX + Math.cos(g.a) * (RW - 20), ty = CY + Math.sin(g.a) * (RW - 20), dx = tx - g.x0, dy = ty - g.y0, len = Math.hypot(dx, dy) || 1;
+      const at = (q: number): [number, number] => {
+        const e = 1 - Math.pow(1 - q, 2), bow = g.pan * 38 * Math.sin(Math.PI * q);
+        return [g.x0 + dx * e - (dy / len) * bow, g.y0 + dy * e + (dx / len) * bow];
+      };
+      const [x, y] = at(u), [x1, y1] = at(Math.max(0, u - 0.08)), env = Math.pow(Math.sin(Math.PI * u), 0.6) * g.alpha, col = toneRgb[g.tone];
+      if (g.half > 0.01) { // the stretch of sample this grain plays, as an arc on the ring
+        c.strokeStyle = `rgba(${col},${env * (g.tone === "drone" ? 0.25 : 0.55)})`; c.lineWidth = 2.2;
+        c.beginPath(); c.arc(CX, CY, RW - 20, g.a - g.half, g.a + g.half); c.stroke();
+      }
+      c.strokeStyle = `rgba(${col},${env * 0.4})`; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(x1, y1); c.lineTo(x, y); c.stroke();
+      c.fillStyle = `rgba(${col},${g.tone === "drone" ? env * 0.5 : env})`;
+      c.beginPath(); c.arc(x, y, g.r, 0, TAU); c.fill();
+    }
+    parts.current = alive;
 
     const held = p.orbHeld.value, pls = 1 + Math.sin(ts * 3) * 0.08;
     c.save(); c.shadowColor = T.hex.violet200; c.shadowBlur = 22; c.strokeStyle = `rgba(${T.rgb.violet200},.9)`; c.lineWidth = 1.4;
