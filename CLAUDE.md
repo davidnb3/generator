@@ -6,6 +6,7 @@ physics-driven), with risers/drops, modulation, and WAV export. Built on Audiore
 
 ## Layout
 
+- `README.md` — short public intro (playful tone; keep it brief). `docs/screenshot.jpg` is its picture; retake it if the look changes.
 - `PLAN.md` — feature plan and phases.
 - Name and logo: the app is Grainwash (formerly Generator). The mark lives in `design/logo/grainwash-mark.svg` (source of truth),
   `public/favicon.svg` and `src/ui/Logo.tsx`; rules are in `design/DESIGN-SYSTEM.md` section 9. Saved MIDI settings still fall back
