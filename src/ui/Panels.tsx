@@ -39,23 +39,35 @@ export function SourcePanel() {
     if (r.ok) toast(`Loaded ${r.sample.name}`);
     else toast(r.error, "error");
   };
-  const meta = `${sample.duration.toFixed(1)} s · ${(sample.sampleRate / 1000).toFixed(1)} kHz · ${sample.channels === 1 ? "mono" : sample.channels === 2 ? "stereo" : `${sample.channels} ch`}${sample.synthetic ? " · demo" : ""}`;
+  const meta = `${sample.duration.toFixed(1)} s · ${(sample.sampleRate / 1000).toFixed(1)} kHz · ${sample.channels === 1 ? "mono" : sample.channels === 2 ? "stereo" : `${sample.channels} ch`}`;
   return (
     <Panel id="pSource" delay={1} style={{ left: 24, top: 80, width: 260, height: 560 }} title={<><i className="dot" />Source</>}>
       <div
-        className={`drop${over ? " over" : ""}`} role="button" tabIndex={0} aria-label="Replace sample"
+        className={`drop${sample.empty ? " empty" : ""}${over ? " over" : ""}`} role="button" tabIndex={0}
+        aria-label={sample.empty ? "Drop a sound here, or click to choose a file" : "Replace sample"}
         onClick={() => file.current?.click()}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.current?.click(); } }}
         onDragEnter={(e) => { e.preventDefault(); setOver(true); }} onDragOver={(e) => { e.preventDefault(); setOver(true); }}
         onDragLeave={() => setOver(false)}
         onDrop={(e) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files[0]; if (f) void load(f); }}
       >
-        <div className="drop-top">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2" /></svg>
-          <div><b>{sample.name}</b><small>{meta}</small></div>
-        </div>
-        <MiniWave />
-        <p>Drop audio here or click to replace</p>
+        {sample.empty ? (
+          <div className="drop-empty">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 16V5M7.5 9.5L12 5l4.5 4.5M5 19h14" /></svg>
+            <b>Drop a sound here</b>
+            <small>or click to choose a file</small>
+            <small>WAV, MP3 or OGG, up to 30 s</small>
+          </div>
+        ) : (
+          <>
+            <div className="drop-top">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2" /></svg>
+              <div><b>{sample.name}</b><small>{meta}</small></div>
+            </div>
+            <MiniWave />
+            <p>Drop audio here or click to replace</p>
+          </>
+        )}
       </div>
       <input type="file" ref={file} accept="audio/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void load(f); e.target.value = ""; }} />
 
@@ -106,7 +118,7 @@ function RoomPicker() {
         <div className="room-name" aria-live="polite">
           <small>Room</small>
           <b>{current.label}</b>
-          {room === "sample" && <small>{sample.synthetic ? "demo texture" : sample.name}</small>}
+          {room === "sample" && <small>{sample.empty ? "no sound yet" : sample.name}</small>}
         </div>
         <button className="icon-btn" aria-label="Next room" onClick={() => step(1)}>›</button>
       </div>

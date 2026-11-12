@@ -21,7 +21,7 @@ const both = (a: Settable, b: Settable): Settable => ({
   setValueAtTime: (v, t) => { a.setValueAtTime(v, t); b.setValueAtTime(v, t); },
 });
 
-export interface StartOptions { when?: number; slowOffset?: number; originalOffset?: number; slowReversed?: boolean }
+export interface StartOptions { when?: number; slowOffset?: number; originalOffset?: number; slowReversed?: boolean; empty?: boolean }
 
 /**
  * The sound path, built the same way live and in an offline render.
@@ -123,13 +123,14 @@ export class Voices extends AudioProcessor<{ master: SchedulableParam }> {
   /** Points every source at a buffer, starts both loops, and re-picks the hit material. */
   setBuffer(buffer: AudioBuffer, o: StartOptions = {}) {
     const when = o.when ?? this.context.currentTime;
-    this.cloud.buffer = buffer;
-    this.drone.buffer = buffer;
+    // with no sound loaded, the clouds and the hit have nothing to read from, so they stay quiet and idle
+    this.cloud.buffer = o.empty ? null : buffer;
+    this.drone.buffer = o.empty ? null : buffer;
     this.restartSlow(buffer, when, o.slowOffset ?? 0, o.slowReversed ?? false);
     this.original.stop();
     this.original.buffer = buffer;
     this.original.start(when, o.originalOffset ?? 0);
-    this.hit.setSource(buffer);
+    this.hit.setSource(o.empty ? null : buffer);
     this.irCache.delete("sample");
   }
 

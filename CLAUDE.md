@@ -26,6 +26,11 @@ physics-driven), with risers/drops, modulation, and WAV export. Built on Audiore
   - Mix model (`mix.ts`): each big knob is one layer's level (`SCALE` holds the measured per-layer gains). DRY WET is an
     equal-power crossfade between the original sample (Dry) and everything generated (Wet). Space is an equal-power
     crossfade between the layers dry and the room. Layer meters and the output meter are real (analysers), not placeholders.
+  - The app starts empty and silent: `sample` holds a silent placeholder (`emptySample`, `empty: true`) until the user drops a file, the
+    clouds and the hit read nothing from it, and REC refuses to start ("Drop a sound in first"). Evolve is off by default. The orb rests (`useSoundActive`: no grains, no head marker, ring and halo
+    still, `live.head` held at 0) whenever there is no sound loaded or the audio isn't running.
+  - Deploy: `.github/workflows/deploy.yml` builds and publishes to GitHub Pages on every push to `main` (set Settings > Pages > Source to
+    GitHub Actions once). The workflow sets `BASE_PATH=/<repo>/`; `vite.config.ts` uses it as `base`, locally it is `/`.
   - Ranges: grain size 10 ms to 4 s, density 1 to 200 grains per second (grain cap 160 per cloud).
   - Rooms (`rooms.ts`): six generated rooms (small, plate, hall, cathedral, cave, metal tank) plus "Your sample" (the
     first 4 s of the loaded sample, DC removed, soft edges, stereo). Chosen with the room picker in the Voices panel.

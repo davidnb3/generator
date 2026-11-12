@@ -109,6 +109,7 @@ A 480 px circular XY surface (canvas, 560 px including glow) that moves a puck. 
 
 | State | Visual |
 |---|---|
+| Resting | No sound loaded, or audio not started: nothing moves. No grains, no sweeping marker, the outer ring stays still, the halo stops breathing. The puck can still be moved, and ripples still answer a click |
 | Idle | Slow halo breathing, grains stream out from the puck |
 | Dragging | Puck ring grows, ripple emitted, puck follows pointer |
 | Evolve | Puck glides to new random targets every 2.8 to 6 s, emitting a ripple |
@@ -156,6 +157,8 @@ Outlined pill with a rose dot. Recording: rose border, tinted fill, dot pulses o
 56 LED segments per channel. Color by position: violet to 60%, amber to 85%, rose above. The dB readout is mono, right-aligned, and always shown next to the meter because color alone is not enough.
 
 ### Drop zone
+With no sound loaded it is the one thing to do, so it stands out: a 2 px dashed amber border, a faint amber fill, a slow pulsing ring (off under reduced motion), an upload icon, "Drop a sound here", and the accepted formats. Once a sound is loaded it settles into the quiet 1 px dashed border below.
+
 Dashed `--line-strong` border, `--r-md`. Shows file name, metadata, a mini waveform and the hint "Drop audio here or click to replace". Hover or drag-over: violet border and tint. Keyboard: Enter or Space opens the file picker.
 
 ### Gesture curves
@@ -236,7 +239,7 @@ The Grainwash mark is a smooth amber half circle with an eye, and a stream of vi
 | Grains (nine dots, shrinking away from the head) | `--violet-200` | Radii 3 down to 1.2 |
 | Eye | `--cream` | Radius 4, sits inside the arc, upper right |
 
-Files: `design/logo/grainwash-mark.svg` (source of truth, standalone hex colours), `public/favicon.svg` (the mark on a dark rounded tile, with heavier strokes and bigger grains so it holds up at 16 px), and the `Logo` component in `src/ui/Logo.tsx` (reads the tokens, so it follows the palette).
+Files: `design/logo/grainwash-mark.svg` (source of truth, standalone hex colours), `public/favicon.svg` (no background tile: a black disc for the head, with the amber arc and cream eye on it and the grains on a transparent background, heavier strokes and bigger grains so it holds up at 16 px, and the eye stays visible on light and dark browser tabs), and the `Logo` component in `src/ui/Logo.tsx` (reads the tokens, so it follows the palette).
 
 Rules:
 - Wordmark: GRAINWASH, Sora 500, uppercase, tracking `--track-brand`, placed to the right of the mark with a 12 px gap. Mark height is about 1.9 times the wordmark cap height (26 px beside 14 px text).

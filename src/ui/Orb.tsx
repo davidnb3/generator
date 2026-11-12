@@ -5,6 +5,7 @@ import { lerp } from "../audio/modulation";
 import { progress } from "./anim";
 import { useMidi } from "./context";
 import { useFrame } from "./frameBus";
+import { useSoundActive } from "./useSoundActive";
 import { getTheme } from "./theme";
 import { useCanvas } from "./useCanvas";
 
@@ -28,6 +29,9 @@ export function Orb() {
   const sample = useValue(instrument.params.sample);
   useEffect(() => { peaks.current = sample.peaks; }, [sample]);
   const armed = state.learning === "orbX" || state.learning === "orbY";
+  // With no sound the orb is still: no grains, no sweeping marker, no turning ring. It wakes when something can be heard.
+  const active = useSoundActive(), activeRef = useRef(active), spin = useRef(0), shimmer = useRef(0);
+  activeRef.current = active;
 
   const toNorm = (e: { clientX: number; clientY: number }): [number, number] => {
     const r = canvas.current!.getBoundingClientRect();
@@ -40,7 +44,10 @@ export function Orb() {
     if (!c) return;
     const T = getTheme(), p = instrument.params, live = instrument.live, t = now / 1000;
     const v = { density: instrument.effective("density"), size: instrument.effective("size"), spray: instrument.effective("spray") };
-    const rise = live.rise;
+    const rise = live.rise, on = activeRef.current;
+    spin.current += on ? (dt / 1000) * 0.18 : 0;
+    shimmer.current += on ? dt / 1000 : 0;
+    const ts = shimmer.current;
     const px = CX + p.orbX.value * RI, py = CY + p.orbY.value * RI;
 
     if (live.impacts !== seenImpacts.current) {
@@ -75,22 +82,24 @@ export function Orb() {
     for (let i = 0; i < N; i++) {
       const a = (i / N) * TAU - Math.PI / 2, peak = pk[Math.floor((i / N) * pk.length)] ?? 0;
       pulse.current[i] *= 0.93;
-      const amp = (0.14 + 0.86 * peak) * (0.92 + 0.08 * Math.sin(t * 2.2 + i * 0.35)) * (1 + v.density * 0.12) + pulse.current[i] * 0.55;
+      const amp = (0.14 + 0.86 * peak) * (0.92 + 0.08 * Math.sin(ts * 2.2 + i * 0.35)) * (1 + v.density * 0.12) + pulse.current[i] * 0.55;
       const half = 2 + amp * 15;
       let behind = (headA - a) % TAU; if (behind < 0) behind += TAU; if (reverse) behind = TAU - behind;
-      c.strokeStyle = behind < 1.1
+      c.strokeStyle = on && behind < 1.1
         ? `rgba(255,${Math.round(190 - behind * 40)},${Math.round(110 + behind * 30)},${0.95 - behind * 0.45})`
         : `rgba(165,140,255,${0.34 + pulse.current[i] * 0.6})`;
       const cs = Math.cos(a), sn = Math.sin(a);
       c.beginPath(); c.moveTo(CX + cs * (RW - half), CY + sn * (RW - half)); c.lineTo(CX + cs * (RW + half), CY + sn * (RW + half)); c.stroke();
     }
-    c.save(); c.shadowColor = T.hex.amber400; c.shadowBlur = 14; c.strokeStyle = T.hex.amber200; c.lineWidth = 2.5;
-    c.beginPath(); c.moveTo(CX + Math.cos(headA) * 200, CY + Math.sin(headA) * 200); c.lineTo(CX + Math.cos(headA) * 238, CY + Math.sin(headA) * 238); c.stroke(); c.restore();
+    if (on) {
+      c.save(); c.shadowColor = T.hex.amber400; c.shadowBlur = 14; c.strokeStyle = T.hex.amber200; c.lineWidth = 2.5;
+      c.beginPath(); c.moveTo(CX + Math.cos(headA) * 200, CY + Math.sin(headA) * 200); c.lineTo(CX + Math.cos(headA) * 238, CY + Math.sin(headA) * 238); c.stroke(); c.restore();
+    }
 
     c.lineWidth = 2 + rise * 2.5;
     let rg: string | CanvasGradient = T.hex.violet400;
     if (c.createConicGradient) {
-      const g = c.createConicGradient(t * 0.18, CX, CY);
+      const g = c.createConicGradient(spin.current, CX, CY);
       g.addColorStop(0, T.hex.violet400); g.addColorStop(0.5, T.hex.amber400); g.addColorStop(1, T.hex.violet400);
       rg = g;
     }
@@ -113,7 +122,8 @@ export function Orb() {
       c.beginPath(); c.arc(px, py, easeOut(k) * (r.big ? 90 : 56), 0, TAU); c.stroke();
     });
 
-    const rate = (0.9 + v.density * 4.2 + rise * 3.2) * (p.freeze.value ? 0.25 : 1);
+    const rate = on ? (0.9 + v.density * 4.2 + rise * 3.2) * (p.freeze.value ? 0.25 : 1) : 0;
+    if (!on) { grains.current = []; spawn.current = 0; }
     spawn.current = Math.min(4, spawn.current + (dt / 16.7) * rate);
     while (spawn.current >= 1 && grains.current.length < 900) {
       spawn.current -= 1;
@@ -144,7 +154,7 @@ export function Orb() {
     }
     grains.current = alive;
 
-    const held = p.orbHeld.value, pls = 1 + Math.sin(t * 3) * 0.08;
+    const held = p.orbHeld.value, pls = 1 + Math.sin(ts * 3) * 0.08;
     c.save(); c.shadowColor = T.hex.violet200; c.shadowBlur = 22; c.strokeStyle = `rgba(${T.rgb.violet200},.9)`; c.lineWidth = 1.4;
     c.beginPath(); c.arc(px, py, (held ? 19 : 15) * pls, 0, TAU); c.stroke(); c.restore();
     c.strokeStyle = T.hex.amber200; c.lineWidth = 1.6; c.beginPath(); c.arc(px, py, 8, 0, TAU); c.stroke();

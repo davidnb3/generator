@@ -3,7 +3,7 @@ import { GESTURE_TYPES, MODULATED, PLAIN, type GestureType, type ModulatedId, ty
 import { clamp, depthOf, effective, gestureBoost, lerp, type Boost } from "./modulation";
 import { gesturePhase } from "./gesture";
 import { createRng, type Rng } from "./rng";
-import { decodeSample, demoSample, type LoadResult, type SampleInfo } from "./sample";
+import { decodeSample, emptySample, type LoadResult, type SampleInfo } from "./sample";
 import type { GrainEvent } from "./GranularCloud";
 import { cutoffHz, rateOf, semitones } from "./granularMath";
 import { Voices, type ControlKey, type Settable } from "./Voices";
@@ -64,6 +64,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
   private originalStart = 0; // context time the original-sample loop started (it always runs at normal speed)
   private slowReversed = false; // whether the slow loop is playing the reversed sample
   private bufferNow: AudioBuffer | null = null;
+  private sampleEmpty = true;
   private taps: AnalyserNode[] = []; // layer meters, then master left and right (live only)
   private tapBuf = new Float32Array(1024);
   /** The most recent recording, kept for Export WAV. */
@@ -97,7 +98,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
       return {
         params: {
           ...nums,
-          evolve: param<boolean>({ default: true }),
+          evolve: param<boolean>({ default: false }),
           freeze: param<boolean>({ default: false }),
           reverse: param<boolean>({ default: false }),
           orbHeld: param<boolean>({ default: false }),
@@ -113,7 +114,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
           gestureBars: param<number>({ default: 8 }),
           gestureProgress: param<number>({ default: 0 }),
           seed: param<number>({ default: 4081 }),
-          sample: param<SampleInfo>({ default: demoSample(ctx) }),
+          sample: param<SampleInfo>({ default: emptySample(ctx) }),
           recordingSince: param<number | null>({ default: null }),
         },
         latency: 0,
@@ -145,7 +146,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
       // The engine starts a source on a render-quantum boundary (128 frames); starting between boundaries would put the
       // loop up to a quantum behind the clock, so land on one.
       const when = quantize(ctx.currentTime + 0.1);
-      voices.setBuffer(this.bufferNow!, { when, slowReversed: this.slowReversed });
+      voices.setBuffer(this.bufferNow!, { when, slowReversed: this.slowReversed, empty: this.sampleEmpty });
       this.clock = initialClock(when);
       this.playerStart = when;
       this.originalStart = when;
@@ -153,10 +154,11 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
       playerAnchored = true;
     };
     this.effect(() => {
-      const buffer = this.params.sample.value.buffer;
-      this.bufferNow = buffer;
+      const sample = this.params.sample.value;
+      this.bufferNow = sample.buffer;
+      this.sampleEmpty = sample.empty;
       if (ctx.state === "running") startPlayer();
-      else { voices.setBuffer(buffer, { when: ctx.currentTime, slowReversed: this.slowReversed }); playerAnchored = false; }
+      else { voices.setBuffer(sample.buffer, { when: ctx.currentTime, slowReversed: this.slowReversed, empty: sample.empty }); playerAnchored = false; }
     });
     ctx.addEventListener("statechange", () => { if (ctx.state === "running" && !playerAnchored) startPlayer(); });
     // Reverse also plays the slow loop backwards: restart it on the mirrored spot of the other direction.
@@ -172,7 +174,10 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
       this.playerStart = when;
       this.lastSent.delete("rate");
     });
-    this.effect(() => voices.setRoom(this.params.room.value, this.params.sample.value.buffer));
+    this.effect(() => {
+      const sample = this.params.sample.value;
+      voices.setRoom(this.params.room.value, sample.empty ? null : sample.buffer);
+    });
     if (ctx instanceof AudioContext) {
       voices.cloud.start();
       voices.drone.start();
@@ -290,12 +295,16 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     // so the soundscape smears around the exact moment you hear in the original. Freeze holds the head and Reverse runs it
     // backwards while the original carries on; when either ends, the head snaps back to the original.
     const dur = p.sample.value.duration;
-    live.transport = this.context.state === "running"
-      ? (Math.max(0, this.context.currentTime - this.originalStart) % dur) / dur
-      : (live.transport + dt / 1000 / dur) % 1; // audio isn't running yet: keep the ring moving
-    if (p.freeze.value) { /* hold */ }
-    else if (p.reverse.value) live.head = (live.head - dt / 1000 / dur + 1) % 1;
-    else live.head = live.transport;
+    if (p.sample.value.empty || this.context.state !== "running") {
+      // nothing can be heard (no sound loaded, or audio not started), so the head rests at the start
+      live.transport = 0;
+      live.head = 0;
+    } else {
+      live.transport = (Math.max(0, this.context.currentTime - this.originalStart) % dur) / dur;
+      if (p.freeze.value) { /* hold */ }
+      else if (p.reverse.value) live.head = (live.head - dt / 1000 / dur + 1) % 1;
+      else live.head = live.transport;
+    }
 
     let rise = 0, drop = 0;
     const g = this.running;
@@ -444,6 +453,7 @@ export class Instrument extends AudioProcessor<InstrumentParams> {
     const ctx = this.context;
     if (!(ctx instanceof AudioContext)) throw new Error("Recording needs a live audio context.");
     if (ctx.state !== "running") throw new Error("Audio is off. Click anywhere on the page, then record.");
+    if (this.params.sample.value.empty) throw new Error("Drop a sound in first, then record.");
     this.recorder ??= new Recorder(ctx, this.output);
     const now = ctx.currentTime, s = this.params.sample.value;
     const take: Take = {

@@ -201,3 +201,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14p
 .mac span.v { height: 12px; margin-top: -5px; font-family: var(--font-mono); font-size: 10px; color: var(--amber-200); }
 .mac.amount.on { cursor: ns-resize; }
 .layer-knobs .knob { position: relative; }
+
+/* Before a sound is loaded the drop field is the one thing to do, so it stands out */
+.drop.empty { padding: 26px 14px; border: 2px dashed var(--amber-400); background: color-mix(in srgb, var(--amber-400) 7%, transparent); animation: drop-pulse 2.4s ease-in-out infinite; }
+.drop.empty:hover, .drop.empty.over { border-color: var(--amber-200); background: color-mix(in srgb, var(--amber-400) 14%, transparent); }
+.drop-empty { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; color: var(--amber-200); }
+.drop-empty svg { margin-bottom: 6px; }
+.drop-empty b { font-weight: 500; font-size: 15px; color: var(--text); }
+.drop-empty small { font-size: 11.5px; color: var(--text-2); }
+.drop-empty small:last-child { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted); margin-top: 6px; }
+@keyframes drop-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--amber-400) 30%, transparent); } 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--amber-400) 0%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .drop.empty { animation: none; } }
+
+.halo.idle { animation: none; opacity: 0.5; transform: none; }

@@ -7,6 +7,7 @@ import { Knob } from "./Knob";
 import { Orb } from "./Orb";
 import { GesturePanel, PerformancePanel, SourcePanel, VoicesPanel } from "./Panels";
 import { TopBar } from "./TopBar";
+import { useSoundActive } from "./useSoundActive";
 import { MidiProvider, StageScale, ToastProvider, ToastView, useMidi, useStageFit } from "./context";
 
 const { instrument } = engine;
@@ -53,9 +54,10 @@ function RecorderWarmup() {
 
 function Stage() {
   const { learnMode, state } = useMidi();
+  const active = useSoundActive();
   return (
     <section id="stage" className="enter" style={{ ["--d" as string]: 2, left: 300, top: 80, width: 840, height: 560 }}>
-      <div className="halo" />
+      <div className={`halo${active ? "" : " idle"}`} />
       <div style={{ position: "absolute", left: 140, top: 0, width: 560, height: 560 }}><Orb /></div>
       {RING.map((r) => {
         const dy = DY[r.row], x = 420 + r.side * Math.sqrt(340 * 340 - dy * dy);
